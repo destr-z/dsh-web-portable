@@ -1,4 +1,4 @@
-# DSH Web 便携版（Windows）
+# DSH Web 便携版（Windows）· 面向 AI 短剧 / AI 视频的剧本工作流
 
 > **非官方（unofficial）。** 这是个人打包的 DSH（DeepSeek Harness）Web 界面 Windows
 > 便携启动器，**不是 DeepSeek 官方发行版**。主程序来自官方开源仓库
@@ -7,9 +7,21 @@
 
 给不想装 Node、不想敲命令的人用：解压 → 双击 → 浏览器里用。
 
+**它不是通用插件合集，而是为 AI 视频生产里"改稿"这一步做的。** 自带插件里有**两个成对的
+剧本文本工作台**，把 AI 短剧 / AI 视频制作中最费人的两段核对工序搬到了界面上：
+
+| 阶段 | 干什么 | 对应插件 |
+|---|---|---|
+| ① 小说 → 剧本 | 逐集对照**原文**和**剧本**，划词写批注，点「下发」让 AI 改剧本 | **剧本批注** `dsh-novel-script` |
+| ② 剧本 → 视频提示词 | 剧本定稿后，逐集对照**剧本**和**视频提示词**（分镜/生视频用的那种），划词写批注，点「下发」让 AI 改提示词 | **提示词对照** `dsh-prompt-compare` |
+
+两段工序都是"左边是锚点、右边是作业区、右边划词写批注、批注写完整理成指令交回对话里的
+agent" —— 因为逐集逐块人肉核对"这一版和上一版哪儿不一样、这一块来自剧本哪几行"，
+是 AI 视频流水线上最容易出错、也最耗时间的一环。
+
 - 默认端口 **3099**，数据（对话记录、设置、密钥）存在 `%LOCALAPPDATA%\DSH-Web`，
   和程序文件夹分开，所以升级只要替换程序文件夹，记录不会丢。
-- 界面上能正常用 `dsh` 的全部能力，另附 4 个自带插件（见下）。
+- 界面上能正常用 `dsh` 的全部能力；另有 2 个通用插件（人设切换、余额挂件）。
 
 ## 这个仓库里有什么 / 没什么
 
@@ -59,23 +71,28 @@ Windows 第一次运行会弹「已保护你的电脑」，因为 exe 没有数�
 
 ## 自带的 4 个插件
 
-| 插件 | 是什么 | 许可 |
-|---|---|---|
-| `@dsh-external/dsh-novel-script` | 剧本批注：小说改剧本时逐集对照原文与剧本，划词写批注 | MIT |
-| `@dsh-external/dsh-prompt-compare` | 提示词对照：剧本定稿后逐集对照剧本与视频提示词，划词写批注 | MIT |
-| `@dsh-external/dsh-persona-switcher` | 人设切换：按会话记住人设模板，输入框上方一键切换 | BSD-3-Clause |
-| `dsh-whale-widget` | 小鲸鱼余额挂件：显示 DeepSeek 余额、今日已用、每轮消耗 | MIT |
+其中 3 个是我自己写的（含上面那两个剧本工作台），1 个是第三方作品。
 
-**第三方作品声明**（这些不是我写的，按各自许可随包分发）：
+| 插件 | 是什么 | 作者 | 许可 |
+|---|---|---|---|
+| `@dsh-external/dsh-novel-script` | **剧本批注** —— 小说改剧本：逐集对照原文与剧本，划词写批注，批注下发让 AI 改稿 | 我（[destr-z](https://github.com/destr-z)） | MIT |
+| `@dsh-external/dsh-prompt-compare` | **提示词对照** —— 剧本定稿后：逐集对照剧本与视频提示词，划词写批注，批注下发让 AI 改提示词 | 我（[destr-z](https://github.com/destr-z)） | MIT |
+| `@dsh-external/dsh-persona-switcher` | **人设切换** —— 按会话记住人设模板，设置页管理、输入框上方一键切换 | 我（[destr-z](https://github.com/destr-z)），已单独开源：[dsh-persona-switcher](https://github.com/destr-z/dsh-persona-switcher) | BSD-3-Clause |
+| `dsh-whale-widget` | **小鲸鱼余额挂件** —— 界面右下角显示 DeepSeek 余额、今日已用、每轮消耗 | 第三方，**MeteorNOX** | MIT |
+
+**第三方作品声明**（只有这一个是别人写的，按它的许可随包分发）：
 
 - `dsh-whale-widget` —— 作者 **MeteorNOX**，来自
   [DeepSeek-Balance-Whale-Widget](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget)（MIT）。
-- `dsh-persona-switcher` —— 来自
-  [destr-z/dsh-persona-switcher](https://github.com/destr-z/dsh-persona-switcher)（BSD-3-Clause）。
+  这个插件**不是**本便携版自研功能的一部分，它的 bug/需求请找上游。
 
 想卸载某个插件：把程序目录 `插件\` 里对应的子文件夹删掉，重启即可。
 想加插件：把打包好的插件文件夹（带 `lib\`）整个复制进 `插件\`，重启即可 ——
 便携版**不会联网装依赖**，所以要"打包好的"形态。
+
+> 两个剧本工作台的详细用法见包内 `使用说明.txt` 第六节的 ② 与 ④。
+> 它们各自只认工作目录下一个固定文件夹（`剧本工作台\` / `对照工作台\`），
+> 没有时会提示一段话，复制给对话里的 AI 就会帮你建好。
 
 ## 自己重新打包
 
