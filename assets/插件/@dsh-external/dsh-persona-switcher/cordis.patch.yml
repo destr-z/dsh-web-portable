@@ -1,0 +1,17 @@
+# Bundle layer of @dsh-external/dsh-persona-switcher, activated by
+# `dsh plugin add` through this package's `dsh.bundle.patch` declaration.
+#
+# The row carries no config: the template library is written on first run
+# (three built-in templates) and managed from the web UI (Settings ▸ Plugins
+# ▸ 人设) or the composer's 人设 selector.
+#
+# The browser half (settings card + composer selector) is auto-discovered via
+# this package's `dsh.client` declaration — no patch row needed for it.
+#
+# Customize WITHOUT editing this file: add an id-targeted (non-insert) patch
+# in your profile's cordis.patch.yml (last write wins). Never `- insert:`
+# another row with this id in your profile patch: a duplicate id at the root
+# list fails the whole web composition.
+- insert:
+    - id: persona-switcher
+      name: '@dsh-external/dsh-persona-switcher'

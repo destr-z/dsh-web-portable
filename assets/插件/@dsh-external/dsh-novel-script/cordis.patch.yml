@@ -1,0 +1,10 @@
+# Bundle layer of @dsh-external/dsh-novel-script.
+#
+# 这个包同时有宿主半边（lib/index.js）和浏览器半边（lib/client.js）。
+# 浏览器半边由 package.json 里的 `dsh.client` 声明自动发现，这里不需要为它加行。
+#
+# ⚠️ 不要在 profile 的 cordis.patch.yml 里再 `- insert:` 一个同 id 的行——
+# 根列表里重复的 id 会让整个 web 装配失败。
+- insert:
+    - id: novel-script
+      name: '@dsh-external/dsh-novel-script'

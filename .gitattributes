@@ -1,0 +1,23 @@
+# 换行策略：这些文件会被 Windows 上的 PowerShell / cmd.exe 直接读取，
+# 换行被 git 自动改写会造成"本机好好的、别人那儿炸"的假故障，所以钉死。
+*.ps1   text eol=lf
+*.mjs   text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+
+# cmd.exe 按行读批处理，用 CRLF 最稳（内容本身必须是纯 ASCII，见 README）
+*.cmd   text eol=crlf
+
+# 注意：这里**不能**用 working-tree-encoding=UTF-8 —— 那个属性会把 BOM 从仓库对象里
+# 滤掉，而 BOM 恰恰是 .ps1 在中文 Windows 上能否运行的前提（几处中文路径参与逻辑）。
+# 所以 .ps1 保持默认按字节存储，BOM 由 scripts/selfcheck.* 的检查来守。
+
+# 二进制产物（万一被误加进来，明确按二进制处理，不做换行转换）
+*.png   binary
+*.gif   binary
+*.mp3   binary
+*.zip   binary
+*.exe   binary

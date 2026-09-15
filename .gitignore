@@ -1,0 +1,13 @@
+# 构建产物：由 build-portable.ps1 生成，不进仓库
+DSH-Web/
+DSH-Web.zip
+dsh便携版版本记录/
+
+# 程序本体（232 MB，走 GitHub Releases，不进 Git）
+程序/
+*.exe
+
+# 临时/调试产物
+.tmp-*
+*.log
+.dsh-trash/
