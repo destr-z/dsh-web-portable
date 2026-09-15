@@ -11,11 +11,12 @@
  *
  * 用法（在仓库根目录）：
  *   node scripts/update-record-hashes.mjs --output ..\portable   # 回填（写 assets\版本更新记录.txt）
+ *   node scripts/update-record-hashes.mjs --output ..\portable --out <文件>   # 只写这一份，不改仓库里的源记录
  *   node scripts/update-record-hashes.mjs --output ..\portable --check   # 只校验，不改文件
  *
- * 注意：这是**发布步骤**，不是提交步骤 —— 它读的是装配好的产物目录，
- * 产物需要 exe，而 exe 不进仓库。所以仓库里的记录可能带着未回填的占位符，
- * 这是正常的；`--check` 会明确告诉你还剩几个没填。
+ * build-portable.ps1 走的是 `--out`：把回填好的记录**直接写进产物目录**，仓库里的
+ * assets\版本更新记录.txt 保持占位符原样。这样"改文件 → 打包 → 记录自动对齐"是
+ * 一趟跑完的，不需要人工在两个副本之间来回搬。
  */
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -44,6 +45,7 @@ const args = parseArgs(process.argv.slice(2))
 const outputRoot = resolve(args.output ?? join(dirname(repoRoot), 'portable'))
 const pkgRoot = join(outputRoot, 'DSH-Web')
 const checkOnly = Boolean(args.check)
+const outPath = args.out ? resolve(String(args.out)) : recordPath
 
 if (!existsSync(recordPath)) {
   console.error(`找不到记录文件：${recordPath}`)
@@ -98,19 +100,15 @@ const updated = record.replace(slotPattern, (whole, rel) => {
   filled++
   return hash
 })
-writeFileSync(recordPath, updated, 'utf8')
-console.log(`\n已回填 ${filled} 处指纹到 ${recordPath}`)
 
-// 坑：记录文件本身也在包里，回填会改它的内容 —— 而产物里那份还是旧内容。
-// 提交前把"产物里的记录"和"回填后的源记录"对一下，不一致就明确提醒，
-// 免得带着旧记录发出去（别人一核对指纹就对不上）。
-const packagedRecord = join(pkgRoot, '版本更新记录.txt')
-if (existsSync(packagedRecord)) {
-  const same = readFileSync(packagedRecord, 'utf8') === updated
-  if (same) {
-    console.log('产物里的记录已与源记录一致。')
-  } else {
-    console.log('注意：产物里的 版本更新记录.txt 与回填后的源记录**不一致**。')
-    console.log('      重新打包（build-portable.ps1 -ReuseExe）后，再跑一次本脚本与 verify-pack.mjs。')
-  }
+if (outPath.toLowerCase() === recordPath.toLowerCase()) {
+  // 直接回填仓库里的源记录（人工发布时用）
+  writeFileSync(recordPath, updated, 'utf8')
+  console.log(`\n已回填 ${filled} 处指纹到 ${recordPath}`)
+} else {
+  // 只写指定文件（build-portable.ps1 用这条：产物目录里的记录就地回填，
+  // 仓库里的源记录保持占位符，两边不再需要人工搬运）
+  writeFileSync(outPath, updated, 'utf8')
+  console.log(`\n已写出回填后的记录：${outPath}`)
+  console.log(`（仓库里的源记录未改动，仍保留占位符：${recordPath}）`)
 }

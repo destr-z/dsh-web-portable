@@ -298,7 +298,38 @@ if ($pluginProblems.Count -gt 0) {
 }
 Write-Host ("  插件 {0} 个，全部通过打包前校验" -f $pluginCount) -ForegroundColor Green
 
-# ---------- 3c. 包内必须带许可证与第三方声明 ----------
+# ---------- 3c. 回填版本记录里的指纹 ----------
+# 记录里写的是占位符 __SHA256:名字__，这里就地回填**产物目录里那份** ——
+# 仓库里的 assets\版本更新记录.txt 保持占位符不动。
+# 为什么不在人这边回填：回到 assets 里的话产物那份就过期了，而回到产物里又会让
+# 仓库那份过期，两边总要有一边要人工搬运。放在打包流程里，一趟跑完就是对齐的。
+Step '回填版本更新记录里的指纹'
+$recordFile = Join-Path $pkg '版本更新记录.txt'
+$hashFiller = Join-Path $PSScriptRoot 'scripts\update-record-hashes.mjs'
+if (-not (Test-Path -LiteralPath $hashFiller)) { throw "缺少 scripts\update-record-hashes.mjs" }
+Invoke-Native 'node' @($hashFiller, '--output', $OutputRoot, '--out', $recordFile) -Capture
+$fillOut = $script:NativeOutput
+if ($script:NativeExit -ne 0) {
+  $fillOut | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+  throw '回填版本记录指纹失败'
+}
+
+# 回填后必须一个占位符都不剩 —— 带着 __SHA256:...__ 发出去，别人一核对就发现对不上
+$recordText = [System.IO.File]::ReadAllText($recordFile, (New-Object System.Text.UTF8Encoding($false)))
+$leftover = [regex]::Matches($recordText, '__SHA256:[^_]+?__')
+if ($leftover.Count -gt 0) {
+  $names = @($leftover | ForEach-Object { $_.Value })
+  Write-Host ("  仍未回填：{0}" -f ($names -join '、')) -ForegroundColor Red
+  throw '版本记录里还有未回填的指纹占位符（多半是记录里写了产物里不存在的文件）'
+}
+Write-Host '  指纹已全部回填' -ForegroundColor Green
+
+# 记录里必须为当前版本留有一节（防的是"改了记录忘了加版本节"）
+$versionSections = [regex]::Matches($recordText, '【v\d+\.\d+\.\d+】')
+if ($versionSections.Count -eq 0) { throw '版本更新记录里找不到任何【vX.Y.Z】版本节' }
+Write-Host ("  记录里有 {0} 个版本节，最新：{1}" -f $versionSections.Count, $versionSections[0].Value)
+
+# ---------- 3d. 包内必须带许可证与第三方声明 ----------
 # exe 是 MIT 许可的 DSH 主程序的再分发副本，不带这两份文件就是不合规的分发。
 Step '校验随包许可文件'
 $requiredNotices = @('notices\LICENSE-deepseek-harness.txt', 'notices\THIRD_PARTY_NOTICES.md')

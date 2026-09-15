@@ -68,7 +68,8 @@ const tarOut = (a) => execFileSync('tar', a, { maxBuffer: 256 * 1024 * 1024 })
 const tarText = (a) => new TextDecoder('gbk').decode(tarOut(a)).split(/\r?\n/).filter(Boolean)
 
 const names = tarText(['-tf', zip])
-const posix = names.map((n) => n.replace(/\\/g, '/'))
+// tar 的列表里目录项带结尾斜杠；只保留文件项，否则会被当成"清单外的多余文件"
+const posix = names.map((n) => n.replace(/\\/g, '/')).filter((n) => n !== '' && !n.endsWith('/'))
 const entryOf = (suffix) => posix.find((n) => n.endsWith(suffix))
 const readEntry = (suffix) => {
   const e = entryOf(suffix)
@@ -145,6 +146,9 @@ if (!recordRaw) {
   const unfilled = record.match(/__SHA256:[^_]+?__/g)
   check(!unfilled, '记录里的指纹都已回填（没有 __SHA256:…__ 占位符）', unfilled ? `剩 ${unfilled.length} 处` : '')
   const recorded = new Set(record.toUpperCase().match(/\b[0-9A-F]{64}\b/g) ?? [])
+  // 注意：这里刻意**不校验 版本更新记录.txt 自己的哈希** —— 记录里写着所有文件的
+  // 指纹，包括它自己，那是自指、算不出来。记录的完整性由 build-portable.ps1 的
+  // "回填后不得残留占位符" 那一步来守。
   for (const rel of ['start-dsh-web.ps1', '诊断.ps1', '使用说明.txt', '启动 DSH Web.cmd', '程序/deepseek-harness.exe']) {
     const p = join(root, ...rel.split('/'))
     if (!existsSync(p)) continue

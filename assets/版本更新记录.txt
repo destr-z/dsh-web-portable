@@ -17,6 +17,79 @@
 
 
 ========================================
+【v1.3.1】2026-09-16  ·  开源前修问题：插件清理不再误删用户插件 + 随包附许可声明
+========================================
+
+■ 一句话
+
+  功能一个没加，全是修问题。最重要的一条：**启动器以前会删掉你自己装的插件**。
+  另外这一版起，包里带上 DSH 主程序的许可证与第三方声明（再分发别人的程序，这是必需的）。
+
+■ 组成（本版**没有重建 exe**，exe 哈希与 v1.2.1 / v1.3.0 相同）
+
+  程序\deepseek-harness.exe          232.36 MB  未换
+  程序\deepseek-harness-rg.exe         5.18 MB   未换
+  启动 DSH Web.cmd                                未换
+  start-dsh-web.ps1                               **已更新**（插件清理改为记账式认领）
+  诊断.ps1                                        **已更新**（修字符串插值 bug；第 4 节改按记账对账）
+  使用说明.txt                                    未换
+  插件\@dsh-external\dsh-novel-script\            **已更新**（补 LICENSE、修 files、README 去掉本机路径）
+  插件\@dsh-external\dsh-persona-switcher\        未换
+  插件\@dsh-external\dsh-prompt-compare\          **已更新**（description 写对、补 LICENSE、修 files）
+  插件\dsh-whale-widget\                          未换
+  notices\LICENSE-deepseek-harness.txt            **新增**
+  notices\THIRD_PARTY_NOTICES.md                  **新增**
+  版本更新记录.txt                                本文件
+
+  整包 zip：DSH-Web.zip   约 71 MB
+
+■ 修了什么
+
+  ① 插件清理不再靠包名猜（**重要**）
+     旧逻辑把 `@dsh-external\` 目录下的一切都当成"随包插件"。于是你自己用
+     `dsh plugin add` 装的、恰好也在这个作用域下的插件，会在下次启动时被删掉，
+     名字还会从 profile 清单里摘走 —— 而且不报错，你只会发现插件"莫名其妙没了"。
+     现在启动器把自己装过的包名记在数据目录的 `managed-plugins.json` 里，
+     清理只认这份记账，外加"这是指向 插件\ 的 junction"这条形态证据。
+     记账文件被手工删掉也不会变砖：退回形态证据仍能认领。
+     ※ 这份记账放在数据目录（不是程序目录），升级/移动便携包不会丢。
+
+  ② 随包附上许可证与第三方声明（notices\）
+     exe 是 MIT 许可的 DSH 主程序的再分发副本，按许可必须随附版权与许可声明；
+     主程序里还含 Apache-2.0 等第三方组件。实测这些文件**没有**被嵌进 exe，
+     所以必须作为随包文件单独放。打包脚本会校验在不在，缺了直接拒绝打包。
+
+  ③ 诊断.ps1 里 `'声明了 $depCount 个依赖'` 用了单引号，变量不会展开，
+     你会看到字面的 `$depCount`；改成双引号。
+
+  ④ `dsh-prompt-compare` 的 description 之前抄的是「剧本批注」的文案
+     （写成"对照原文与剧本"，实际它对照的是剧本与提示词）。这个字段会出现在
+     插件列表里，属于描述不属实。
+
+  ⑤ 两个自研插件补 LICENSE 文件、修 `files` 字段（原先漏了 `lib/shared/**`，
+     真到 npm 打包会缺运行时必需的文件）。
+
+■ 核对信息
+
+  主程序 SHA256（**与 v1.3.0 / v1.2.1 相同** —— 本版没重建 exe）：
+    __SHA256:程序/deepseek-harness.exe__
+  启动器 start-dsh-web.ps1 SHA256：
+    __SHA256:start-dsh-web.ps1__
+  使用说明.txt SHA256：
+    __SHA256:使用说明.txt__
+  诊断.ps1 SHA256：
+    __SHA256:诊断.ps1__
+  启动 DSH Web.cmd SHA256（**已变** —— 本版把它的换行统一成 CRLF）：
+    __SHA256:启动 DSH Web.cmd__
+
+■ 已知问题与边界
+
+  · 插件不是沙箱，只装你信得过的；
+  · 程序不解析正文格式（同 v1.3.0）；
+  · 清单里的 `anchor` 必须唯一命中（同 v1.3.0）。
+
+
+========================================
 【v1.3.0】2026-09-15  ·  新增「提示词对照」插件（自带插件 3 → 4 个）
 ========================================
 
@@ -60,7 +133,7 @@
 ■ 核对信息
 
   主程序 SHA256（**与 v1.2.1 相同** —— 本版没重建 exe）：
-    __SHA256:exe__
+    __SHA256:程序/deepseek-harness.exe__
   启动器 start-dsh-web.ps1 SHA256：
     __SHA256:start-dsh-web.ps1__
   使用说明.txt SHA256：
