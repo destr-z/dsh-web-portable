@@ -21,13 +21,32 @@
 超过 100 MB 的单个文件 GitHub 直接拒收，而且每次重新打包 exe 的哈希都会变，
 塞进 Git 历史会迅速把仓库撑爆。所以：
 
-- **程序本体和整包 zip 在 [Releases](../../releases) 里下载**，不进仓库；
+- **程序本体和整包 zip 在 [Releases](https://github.com/destr-z/dsh-web-portable/releases) 里下载**，不进仓库；
 - 仓库里的东西加起来只有几百 KB，是"能被 git 跟踪、能被 review"的那部分。
+
+## 下载与校验
+
+最新版：**[v1.3.1](https://github.com/destr-z/dsh-web-portable/releases/tag/v1.3.1)**
+→ [`DSH-Web-v1.3.1.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v1.3.1/DSH-Web-v1.3.1.zip)（71.2 MB）
+
+```
+DSH-Web-v1.3.1.zip            SHA256  32A76E42CB835FD5CD0E9D5BD29C467F2AFB7D9FE925B147DF66168622E32F51
+程序\deepseek-harness.exe     SHA256  2480903F911FA53C9C7CEC83BF806535A06F77701A5BEF6C7862E8A3313DB67B
+```
+
+解压后自己核对一次：
+
+```powershell
+(Get-FileHash '程序\deepseek-harness.exe' -Algorithm SHA256).Hash
+```
+
+包内 `版本更新记录.txt` 里逐个文件都记了 SHA256，可对照。exe 哈希在 v1.3.0 / v1.3.1
+之间**相同**（这两版都没重建 exe），换到重建过的版本时该值会变，届时以该版记录为准。
 
 ## 怎么用
 
-1. 到 [Releases](../../releases) 下载 `DSH-Web-*.zip`，**完整**解压到任意位置
-   （不要只复制其中几个文件）。
+1. 到 [Releases](https://github.com/destr-z/dsh-web-portable/releases) 下载 `DSH-Web-*.zip`，
+   **完整**解压到任意位置（不要只复制其中几个文件）。
 2. 双击 `启动 DSH Web.cmd`。会出现一个黑色窗口，别关它；几秒后浏览器自动打开。
 3. 第一次要先填 API Key：界面左下角「设置」→ 模型/凭据 → 填你的 DeepSeek API Key。
 
@@ -95,9 +114,15 @@ node scripts/verify-pack.mjs --archive       # 校验通过后归档到 版本�
 界面弄得起不来。这个测试在临时沙箱里用一个假 exe 把启动器当黑盒跑 5 个场景，
 专门盯住"用户自己 `dsh plugin add` 装的包一个字节都不许动"这条底线。
 
-`版本更新记录.txt` 里的指纹写成占位符 `__SHA256:start-dsh-web.ps1__`，
-由 `update-record-hashes.mjs` 自动回填 —— 手抄 34 个哈希必然出错。
-回填会改动记录文件本身，所以要**回填 → 重新打包 → 再跑一次 verify-pack.mjs**。
+`版本更新记录.txt` 里的指纹写成占位符 `__SHA256:start-dsh-web.ps1__`。
+`build-portable.ps1` 会在压缩前把它们**就地回填进产物目录里那份记录**（仓库里的
+`assets\` 那份保持占位符原样），所以"改文件 → 打包 → 记录对齐"是一趟跑完的，
+不需要人工在两个副本之间搬。
+
+⚠️ **动过 `.ps1` 之后先跑 `scripts/fix-bom.ps1`**：编辑器和补丁工具会静默吃掉
+UTF-8 BOM，而 BOM 是 `.ps1` 在中文 Windows 上能否运行的前提（脚本里的中文路径
+参与逻辑，乱码就等于找不到插件目录）。这个脚本还会把 `启动 DSH Web.cmd` 钉成
+CRLF 并检查内容仍是纯 ASCII。
 
 ## 目录结构
 
@@ -107,9 +132,10 @@ assets/                     随包文件的唯一真相源（build 从这里拷�
   启动 DSH Web.cmd          双击入口（纯 ASCII，CRLF）
   诊断.ps1                  只读诊断：程序文件/端口/数据目录/插件
   使用说明.txt              给最终用户的说明书
-  版本更新记录.txt           每版一节的变更与指纹记录
+  版本更新记录.txt           每版一节的变更与指纹记录（指纹写占位符）
   插件/                     打包好的自带插件（构建产物，含 lib/）
-build-portable.ps1          构建 exe → 装配目录 → 压 zip
+build-portable.ps1          构建 exe → 装配目录 → 回填指纹 → 压 zip
+scripts/fix-bom.ps1         补回被吃掉的 BOM / 钉 CRLF
 scripts/selfcheck.mjs       仓库自检（Node 侧）
 scripts/selfcheck.ps1       仓库自检（PowerShell 语法侧）
 scripts/test-plugin-sync.ps1 插件同步逻辑的离线测试（沙箱 + 假 exe）
@@ -141,3 +167,8 @@ notices/                    再分发主程序必需的许可证与第三方声�
 - 命名与素材遵循官方
   [BRAND_GUIDELINES](https://github.com/deepseek-ai/deepseek-harness/blob/main/BRAND_GUIDELINES.md)：
   项目名只用 "DSH" 缩写，不暗示官方背书。
+
+## 我自己是谁
+
+业余做的，非官方，跟 DeepSeek 没有关系。仓库内容按现状提供，不保证不出问题 ——
+数据（对话记录、密钥）都在你自己的机器上，升级前建议照 `使用说明.txt` 第四节备份一次。
