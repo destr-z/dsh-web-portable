@@ -1,0 +1,55 @@
+{
+  "name": "@dsh-external/dsh-ui-skin",
+  "version": "0.1.0",
+  "description": "DSH 皮肤插件：在浅色/深色之上叠加一层可选皮肤（DeepSeek 官方蓝 / Codex / Claude Code），含设置页的三卡选择行、body[data-dsh-ui-skin] 标记，以及可自备图片素材的素材目录（默认数据目录下 skins\\，可另设绝对路径）。三张卡各一张图：deepseek-mascot.png / codex-icon.png / claude-icon.png；缺哪张，哪张卡回退内置矢量标记。",
+  "private": true,
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
+  "files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/client.js",
+    "lib/styles/**/*.css",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "cordis": ">=4.0.0-rc <5",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.0.1-rc <2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "^5.9.0"
+  },
+  "scripts": {
+    "build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-general",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web"
+    }
+  }
+}

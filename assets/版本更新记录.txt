@@ -17,6 +17,102 @@
 
 
 ========================================
+【v1.4.0】2026-09-16  ·  新增「皮肤」插件（自带插件 4 → 5 个）
+========================================
+
+■ 一句话
+
+  多了一个皮肤插件：在「浅色 / 深色 / 跟随系统」之上再叠一层皮肤（DeepSeek 官方蓝 /
+  Codex / Claude Code），设置页里三张卡点一下就切。
+
+■ 组成（本版**没有重建 exe**，exe 哈希与 v1.3.1 相同）
+
+  程序\deepseek-harness.exe          232.36 MB  未换
+  程序\deepseek-harness-rg.exe         5.18 MB  未换
+  启动 DSH Web.cmd                                未换
+  start-dsh-web.ps1                               **已更新**（profile 补丁新增一条：
+                                                  关掉 exe 内置的同名皮肤，见下）
+  诊断.ps1                                        未换
+  使用说明.txt                                    未换
+  插件\@dsh-external\dsh-novel-script\            未换
+  插件\@dsh-external\dsh-persona-switcher\        未换
+  插件\@dsh-external\dsh-prompt-compare\         未换
+  插件\@dsh-external\dsh-ui-skin\                 **新增**（皮肤插件，12 个文件）
+  插件\dsh-whale-widget\                          未换
+  notices\                                        未换
+  版本更新记录.txt                                本文件
+
+  整包 zip：DSH-Web.zip   约 71.3 MB
+
+■ 新增的皮肤插件做什么
+
+  · 三种皮肤，各是一层 token 覆盖（不发明暗、只叠配色）：
+      DeepSeek（默认，官方蓝 #4D6BFE）／Codex（单色近黑 + 绿）／Claude Code（奶油 + 橙）
+  · 设置 ▸ 通用 → 「皮肤」三张卡点选；选择记在浏览器 localStorage，跨标签页同步。
+  · 卡的识别标记默认用内置矢量图；想用位图就往**素材目录**里放图：
+      默认目录：%LOCALAPPDATA%\DSH-Web\skins\
+      也可在设置里另填一个绝对路径覆盖它
+    只认**三张**（一张卡一张，多一张都不要）：
+      deepseek-mascot.png   ← DeepSeek 卡
+      codex-icon.png        ← Codex 卡
+      claude-icon.png       ← Claude Code 卡
+    目录里缺哪张，哪张卡就用内置矢量版，**不会发失败请求**（客户端先问一次清单）。
+  · 素材不随包分发（都是个人素材/第三方品牌图标），包内一张图都不带。
+
+■ 本版修掉的问题（都是实测踩出来的）
+
+  ① **两份皮肤同时跑会让界面白屏**（本版最重要的一条）
+     exe 内置的树内皮肤与本插件都注册了同名服务 `skin`，而 cordis 的 provide
+     不能重复注册 —— 第二次注册直接抛错，条目的 apply 失败会让**整个界面**只剩
+     一页 `Failed to load plugins`。
+     修法两处一起：
+       · 插件把自己的服务/事件/设置命名空间/locale 命名空间/slot id 全部改名
+         （skin → uiSkin、settings.skin → settings.dshUiSkin、ui-skin → dsh-ui-skin…），
+         两份可以安全共存；
+       · 启动器在 profile 补丁里加一条 `- id: ui-skin / disabled: true`，
+         把树内那条关掉 —— 否则设置页会出现**两个「皮肤」**，旧的盖住新的。
+     ※ disable 一个不存在的 id 是无害的（实测过），所以对没有树内皮肤的官方源码
+       构建的 exe 也安全。
+
+  ② 客户端读写设置用错了 API
+     原先按 `scope.get()` / `scope.set(整段对象)` 写，真实契约是
+     `getSnapshot()` / `set(字段, 值)` / `unset(字段)` —— 结果是插件一加载就报
+     `scope?.get is not a function`，设置页整块出不来。这类错误 HTTP 层验证抓不到，
+     要靠真实浏览器（或用假 ctx 执行 bundle）才能发现。
+
+  ③ 图片需求从 6 张收敛到 3 张
+     早先照抄源码素材列表，白名单里列了 6 个文件名，其中 `deepseek-avatar.png` /
+     `deepseek-mascot-head.png` / `deepseek-favicon.png` 从来没有被真正渲染过
+     （favicon 那一处已删除）。多余的条目会让"该往目录里放哪几张图"变得含糊。
+
+  ④ 打包源漏了插件
+     上一版之后是本机手工把插件放进 `DSH-Web\插件\` 的，不在打包源
+     （`assets\插件\`）里；重新打包会清空重建那个目录，插件就被覆盖丢了。
+     本版已把它加进打包源，以后每次打包自动带上。
+
+■ 核对信息
+
+  主程序 SHA256（**与 v1.3.1 相同** —— 本版没重建 exe）：
+    __SHA256:程序/deepseek-harness.exe__
+  启动器 start-dsh-web.ps1 SHA256：
+    __SHA256:start-dsh-web.ps1__
+  使用说明.txt SHA256（**未变**）：
+    __SHA256:使用说明.txt__
+  诊断.ps1 SHA256（**未变**）：
+    __SHA256:诊断.ps1__
+  启动 DSH Web.cmd SHA256（**未变**）：
+    __SHA256:启动 DSH Web.cmd__
+
+■ 已知问题与边界
+
+  · 皮肤插件的 Codex / Claude Code 两张卡的**内置矢量兜底**是从旧素材描摹的，
+    观感与原图有差距；位图（放进素材目录）才是准的。
+  · 插件与树内皮肤虽然改名为可共存，但**同时启用**时仍是两套皮肤各管一套设置，
+    所以启动器默认关掉树内那条；如果你手工启用，会看到两个「皮肤」。
+  · 素材目录里放多余的图片文件不影响功能（插件只认那三个文件名）。
+
+
+========================================
 【v1.3.1】2026-09-16  ·  开源前修问题：插件清理不再误删用户插件 + 随包附许可声明
 ========================================
 

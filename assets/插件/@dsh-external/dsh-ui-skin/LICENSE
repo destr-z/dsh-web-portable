@@ -1,0 +1,30 @@
+MIT License
+
+Copyright (c) 2026 destr-z
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+本插件内含一处来自 DeepSeek Harness（MIT，Copyright (c) 2026 DeepSeek）的素材：
+`src/client/marks/WhaleGirlMark.tsx` 里的鲸鱼剪影路径（原 `ui-primitives` 的
+`FISH_LOGO_PATH`），已就地内联，仅用于"素材目录里没有位图"时的内置回退。
+
+位图素材（codex-icon.png / claude-icon.png / deepseek-*.png）**不随本插件分发**，
+由使用者自行放入本地素材目录。

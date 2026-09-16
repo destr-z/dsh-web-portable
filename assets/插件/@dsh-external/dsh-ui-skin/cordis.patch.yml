@@ -1,0 +1,15 @@
+# Bundle layer of @dsh-external/dsh-ui-skin.
+#
+# 这个包同时有宿主半边（lib/index.js）和浏览器半边（lib/client.js）。
+# 浏览器半边由 package.json 里的 `dsh.client` 声明自动发现，这里不需要为它加行。
+#
+# ⚠️ 条目 id 用 external-ui-skin 而不是 ui-skin：**树内**也有一个 ui-skin
+# （packages/client/ui-skin，装配在 web-app bundle 里）。如果从便携版/官方源码构建的
+# 实例里两者同时存在，同 id 会让 loader 直接报 "duplicate loader entry id" 并使整个
+# 界面起不来（实测踩过）。加 external- 前缀就与树内那条彻底分开，两者可以共存 ——
+# 用户想用哪个就留哪个。
+#
+# ⚠️ 也不要在 profile 的 cordis.patch.yml 里再 `- insert:` 一个同 id 的行。
+- insert:
+    - id: external-ui-skin
+      name: '@dsh-external/dsh-ui-skin'
