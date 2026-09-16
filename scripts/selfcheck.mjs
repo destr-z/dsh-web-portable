@@ -158,8 +158,23 @@ check(hits === 0, `仓库内脚本/文档无开发机绝对路径（扫了 ${sca
 section('6) 换行与体积')
 const cmdBuf = existsSync(cmdPath) ? readFileSync(cmdPath, 'utf8') : ''
 check(cmdBuf.includes('\r\n'), '启动 DSH Web.cmd 使用 CRLF 换行', cmdBuf.includes('\r\n') ? '' : '← cmd.exe 上建议 CRLF')
-const totalBytes = walk(repoRoot, () => true).filter((p) => !p.includes('.git')).reduce((n, p) => n + statSync(p).size, 0)
-check(totalBytes < 20 * 1024 * 1024, `仓库文本总量 ${(totalBytes / 1048576).toFixed(2)} MB（应远小于 exe）`)
+// 体积只统计**要提交的东西**：以前这里把 .gitignore 掉的文件也算进来，于是
+// 一次删除动作留下的 .dsh-trash（里面可能躺着一个 71 MB 的旧 zip）会让这一项
+// 假失败 —— 明明 git 干净得很。所以把忽略目录与构建产物一并排除。
+const IGNORED_DIRS = ['.git', 'node_modules', '.dsh-trash']
+const isIgnoredPath = (p) => {
+  const rel = p.slice(repoRoot.length + 1).replace(/\\/g, '/')
+  if (IGNORED_DIRS.some((d) => rel === d || rel.startsWith(`${d}/`))) return true
+  if (/\.exe$/i.test(rel)) return true
+  if (rel === 'DSH-Web.zip') return true
+  if (rel.startsWith('DSH-Web/') || rel.startsWith('dsh便携版版本记录/')) return true
+  if (/(^|\/)\.tmp-/.test(rel) || /\.log$/i.test(rel)) return true
+  return false
+}
+const trackedFiles = walk(repoRoot, () => true).filter((p) => !isIgnoredPath(p))
+const totalBytes = trackedFiles.reduce((n, p) => n + statSync(p).size, 0)
+check(totalBytes < 20 * 1024 * 1024,
+  `仓库待提交内容总量 ${(totalBytes / 1048576).toFixed(2)} MB（${trackedFiles.length} 个文件，应远小于 exe）`)
 
 console.log(`\n${bad === 0 ? '自检：全部通过' : `自检：${bad} 项未通过`}`)
 if (bad === 0) console.log('提示：语法层面再跑一次  pwsh -File scripts/selfcheck.ps1')
