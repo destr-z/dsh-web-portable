@@ -224,6 +224,25 @@ $profilePatchContent = @'
       name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
 '@
 
+# 关掉**树内**那条皮肤。
+#
+# 背景：官方源码/自制 fork 构建的 exe 里，web-app bundle 自带一条 id=ui-skin 的
+# 皮肤（packages/client/ui-skin，编进 exe、不在 插件\ 里）。而本便携包自带的
+# @dsh-external/dsh-ui-skin 是同一功能的独立插件版本。两者互不相干，但都往
+# 「设置 ▸ 通用」的同一个槽位注册 —— 结果是两个「皮肤」标题、且树内那份盖住插件
+# 那份（树内那份没有素材目录输入框，用户会以为新功能没做出来）。
+#
+# 为什么敢无条件写：**实测过** disable 一个不存在的 id 不会让 loader 报错
+# （在隔离实例里拿 this-id-does-not-exist-xyz 试过，实例照常启动）。所以这里
+# 不需要"先探测 exe 里有没有那条" —— 官方源码构建的 exe（没有树内皮肤）不受影响。
+$profilePatchContent += @'
+
+# 关掉树内那条同名皮肤（原因见启动器注释）：它与随包插件抢同一个设置槽位。
+# disable 一个不存在的 id 是无害的，所以这一条对没有树内皮肤的 exe 也安全。
+- id: ui-skin
+  disabled: true
+'@
+
 try {
   New-Item -ItemType Directory -Force -Path $profileDir | Out-Null
   # 内容不同才写，避免每次启动都改文件（不改就不会触发无谓的热加载）
