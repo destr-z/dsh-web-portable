@@ -8,6 +8,12 @@
 
 **只改提示词。剧本是只读参考，一个字都不动。**
 
+> ⚠️ **样式类前缀是 `pc-`，不要改回 `ns-`。** 姊妹插件 `dsh-novel-script` 用的是 `ns-`，
+> 而两个面板**会同时出现在同一个页面里**、各自插一个 `<style>`，同名类**后注入的赢**。
+> 2026-09-15 踩过一次：两边都叫 `ns-para`，而本插件那边是 `flex-direction: column`
+> （块要抬头一行、正文一行），结果把剧本批注面板的段落整个竖排了。
+> 加样式前先看一眼对方有没有同名类。
+
 ---
 
 ## 1. 分工（一句话）
@@ -219,7 +225,7 @@ agent 拆成"每集一份"后自检行数。程序只认固定目录 + 固定文
 ## 9. 构建与安装
 
 ```powershell
-cd <本插件目录>
+cd D:\001\ai\deepseek\dsh-plugins\dsh-prompt-compare
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 

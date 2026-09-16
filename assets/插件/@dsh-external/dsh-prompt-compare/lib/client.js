@@ -1348,11 +1348,11 @@ window.__ModuleLoader__.load({
 		*/
 		function blockBody(block, missing) {
 			if (missing) return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-				className: "ns-para-bad",
+				className: "pc-para-bad",
 				children: "（清单与文件对不上：找不到这一块）"
 			});
 			return block.lines.slice(1).map((line, i) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-				className: "ns-para-line",
+				className: "pc-para-line",
 				children: line
 			}, i));
 		}
@@ -1520,7 +1520,7 @@ window.__ModuleLoader__.load({
 			*   · **不按 Ctrl**：这一划就是新的全部选择（替换掉之前选的），**立刻弹输入框**；
 			*   · **按住 Ctrl/Cmd**：把这一处**并进去** —— 这就是"多选不连续的几个地方"；
 			*   · 按住 Ctrl 连选期间**不弹输入框**：这段时间屏幕上**只有一个反馈**：
-			*     被选中的块带一层更深的底色（`.ns-para-pending`），**松开 Ctrl 之后再弹框**
+			*     被选中的块带一层更深的底色（`.pc-para-pending`），**松开 Ctrl 之后再弹框**
 			*     （见下面的 keyup 效果）。
 			*     ⚠️ 不要在选区旁边飘提示文字 —— 它就压在提示词上，会把接下来要划的那几行挡住。
 			* 每一处都记成"块范围"（连续跨块算一处），因为一个块是"一行一块"还是
@@ -1633,7 +1633,7 @@ window.__ModuleLoader__.load({
 					if (!open) return;
 					const box = popRef.current;
 					if (box !== null && e.target instanceof Node && box.contains(e.target)) return;
-					if (e.target instanceof Element && e.target.closest(".ns-col-prompt") !== null) return;
+					if (e.target instanceof Element && e.target.closest(".pc-col-prompt") !== null) return;
 					closePending();
 				};
 				document.addEventListener("keydown", onKey);
@@ -1819,10 +1819,10 @@ window.__ModuleLoader__.load({
 				const el = wbRef.current;
 				if (el === null) return;
 				const session = geo.beginDrag(el.getBoundingClientRect(), e.clientX, e.clientY, dragMode);
-				document.body.classList.add(dragMode === "move" ? "ns-dragging" : "ns-resizing");
+				document.body.classList.add(dragMode === "move" ? "pc-dragging" : "pc-resizing");
 				const onMove = (ev) => session.apply(ev.clientX, ev.clientY);
 				const onUp = () => {
-					document.body.classList.remove("ns-dragging", "ns-resizing");
+					document.body.classList.remove("pc-dragging", "pc-resizing");
 					document.removeEventListener("mousemove", onMove);
 					document.removeEventListener("mouseup", onUp);
 					session.finish();
@@ -1839,7 +1839,7 @@ window.__ModuleLoader__.load({
 				const startW = side === "src" ? srcW : annoW;
 				const total = colsRef.current?.clientWidth ?? 0;
 				const max = Math.max(MIN_SIDE, total - (side === "src" ? annoW : srcW) - MIN_MID - 22);
-				document.body.classList.add("ns-colresizing");
+				document.body.classList.add("pc-colresizing");
 				const onMove = (ev) => {
 					const d = ev.clientX - startX;
 					const next = Math.min(Math.max(MIN_SIDE, startW + (side === "src" ? d : -d)), max);
@@ -1847,7 +1847,7 @@ window.__ModuleLoader__.load({
 					else setAnnoW(next);
 				};
 				const onUp = () => {
-					document.body.classList.remove("ns-colresizing");
+					document.body.classList.remove("pc-colresizing");
 					document.removeEventListener("mousemove", onMove);
 					document.removeEventListener("mouseup", onUp);
 				};
@@ -1893,13 +1893,13 @@ window.__ModuleLoader__.load({
 				const regions = a.regions ?? [];
 				const first = regions[0];
 				return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-					className: `ns-acard${a.done ? " ns-acard-done" : ""}`,
+					className: `pc-acard${a.done ? " pc-acard-done" : ""}`,
 					children: [
 						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: "ns-acard-r1",
+							className: "pc-acard-r1",
 							children: [
 								episodeNo === void 0 ? null : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-									className: "ns-tag",
+									className: "pc-tag",
 									children: [
 										"第 ",
 										episodeNo,
@@ -1907,11 +1907,11 @@ window.__ModuleLoader__.load({
 									]
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-									className: "ns-tag",
+									className: "pc-tag",
 									children: first === void 0 ? "（没有区域）" : regionLabel(first)
 								}),
 								regions.length > 1 ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-									className: "ns-tag",
+									className: "pc-tag",
 									children: [
 										"共 ",
 										regions.length,
@@ -1919,20 +1919,20 @@ window.__ModuleLoader__.load({
 									]
 								}) : null,
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-									className: `ns-tag${a.done ? " ns-tag-done" : ""}`,
+									className: `pc-tag${a.done ? " pc-tag-done" : ""}`,
 									children: a.done ? `已处理${a.resolvedIn === null ? "" : ` · ${a.resolvedIn}`}` : "未处理"
 								}),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "ns-spacer" }),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "pc-spacer" }),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 									type: "button",
-									className: "ns-x",
+									className: "pc-x",
 									title: episodeNo === void 0 ? "定位到这些地方" : `定位到第 ${episodeNo} 集`,
 									onClick: () => jumpToBlock(episodeOfCard, a.regions),
 									children: "◎"
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 									type: "button",
-									className: "ns-x",
+									className: "pc-x",
 									title: "删除这条批注",
 									onClick: () => deleteOne(episodeOfCard, a.id),
 									children: "✕"
@@ -1940,10 +1940,10 @@ window.__ModuleLoader__.load({
 							]
 						}),
 						regions.map((region, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: "ns-acard-q",
+							className: "pc-acard-q",
 							children: [
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-									className: "ns-acard-ln",
+									className: "pc-acard-ln",
 									children: regionLabel(region)
 								}),
 								"“",
@@ -1952,23 +1952,23 @@ window.__ModuleLoader__.load({
 							]
 						}, `${region.paragraph}-${index}`)),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: "ns-why",
+							className: "pc-why",
 							children: a.problem
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: "ns-ameta",
+							className: "pc-ameta",
 							children: a.id
 						})
 					]
 				}, a.id);
 			};
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: `ns-workbench${isMin ? " ns-min" : ""}`,
+				className: `pc-workbench${isMin ? " pc-min" : ""}`,
 				ref: wbRef,
 				style: wbStyle,
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: "ns-wb-hd",
+						className: "pc-wb-hd",
 						onMouseDown: (e) => {
 							if (e.target.closest("button, select, input, textarea, a, [contenteditable=\"true\"]")) return;
 							const el = wbRef.current;
@@ -1998,23 +1998,23 @@ window.__ModuleLoader__.load({
 						},
 						children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: "ns-grip",
+								className: "pc-grip",
 								"aria-hidden": true,
 								children: "⋮⋮"
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: "ns-t",
+								className: "pc-t",
 								children: "提示词对照"
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: "ns-meta",
+								className: "pc-meta",
 								children: scan.phase === "missing" ? "这个工作区还没登记" : `${versionLabel} · 第 ${episodeLabel} 集`
 							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "ns-spacer" }),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "pc-spacer" }),
 							!isMin && scan.versions.length > 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 									type: "button",
-									className: "ns-x",
+									className: "pc-x",
 									title: "上一集（←）",
 									disabled: episodeNav.prev === void 0,
 									onClick: () => {
@@ -2024,7 +2024,7 @@ window.__ModuleLoader__.load({
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 									type: "button",
-									className: "ns-x",
+									className: "pc-x",
 									title: "下一集（→）",
 									disabled: episodeNav.next === void 0,
 									onClick: () => {
@@ -2033,7 +2033,7 @@ window.__ModuleLoader__.load({
 									children: "▶"
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("select", {
-									className: "ns-sel",
+									className: "pc-sel",
 									title: "选版本",
 									value: version?.version ?? "",
 									onChange: (e) => {
@@ -2052,7 +2052,7 @@ window.__ModuleLoader__.load({
 									}, v.version))
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("select", {
-									className: "ns-sel",
+									className: "pc-sel",
 									title: "选集",
 									value: episode === null ? "" : String(episode.episode),
 									onChange: (e) => setPickEpisode(Number(e.target.value)),
@@ -2069,7 +2069,7 @@ window.__ModuleLoader__.load({
 							] }) : null,
 							!isMin ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
-								className: "ns-x",
+								className: "pc-x",
 								title: "刷新（重读工作台目录、清单、剧本与批注）",
 								onClick: () => {
 									wb.reload();
@@ -2081,7 +2081,7 @@ window.__ModuleLoader__.load({
 							}) : null,
 							!isMin ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
-								className: "ns-x",
+								className: "pc-x",
 								title: geo.mode === "max" ? "还原为默认大小" : "放大（占满整个界面）",
 								onClick: geo.toggleMax,
 								children: geo.mode === "max" ? "⤡" : "⛶"
@@ -2089,7 +2089,7 @@ window.__ModuleLoader__.load({
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								ref: minBtnRef,
 								type: "button",
-								className: "ns-x",
+								className: "pc-x",
 								title: isMin ? "展开工作台" : "收起成一枚小胶囊",
 								onClick: () => geo.toggleMin(minBtnRef.current),
 								children: isMin ? "▣" : "—"
@@ -2098,27 +2098,27 @@ window.__ModuleLoader__.load({
 					}),
 					!isMin ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: "ns-rs ns-rs-r",
+							className: "pc-rs pc-rs-r",
 							title: "拖动调整宽度",
 							onMouseDown: (e) => startDrag(e, "w")
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: "ns-rs ns-rs-b",
+							className: "pc-rs pc-rs-b",
 							title: "拖动调整高度",
 							onMouseDown: (e) => startDrag(e, "h")
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: "ns-rs ns-rs-br",
+							className: "pc-rs pc-rs-br",
 							title: "拖动调整大小",
 							onMouseDown: (e) => startDrag(e, "corner")
 						})
 					] }) : null,
 					!isMin && notices.length > 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: "ns-issues ns-issues-err",
+						className: "pc-issues pc-issues-err",
 						title: notices.join("\n"),
 						children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-								className: "ns-issues-t",
+								className: "pc-issues-t",
 								children: [
 									"有问题 ",
 									notices.length,
@@ -2126,24 +2126,24 @@ window.__ModuleLoader__.load({
 								]
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: "ns-issues-m",
+								className: "pc-issues-m",
 								children: notices[0]
 							}),
 							notices.length > 1 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: "ns-issues-n",
+								className: "pc-issues-n",
 								children: "悬停看全部"
 							}) : null
 						]
 					}) : null,
 					!isMin && scan.phase === "missing" ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: "ns-onboard",
+						className: "pc-onboard",
 						children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: "ns-onboard-t",
+								className: "pc-onboard-t",
 								children: "这个工作区还没登记"
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: "ns-page-d",
+								className: "pc-page-d",
 								children: [
 									"工作台只读 ",
 									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("b", { children: "对照工作台/" }),
@@ -2151,21 +2151,21 @@ window.__ModuleLoader__.load({
 								]
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("pre", {
-								className: "ns-copy",
+								className: "pc-copy",
 								children: REGISTER_PROMPT
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: "ns-onboard-act",
+								className: "pc-onboard-act",
 								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 									type: "button",
-									className: "ns-btn ns-btn-primary",
+									className: "pc-btn pc-btn-primary",
 									onClick: () => {
 										navigator.clipboard?.writeText(REGISTER_PROMPT).then(() => setToast("已复制 —— 粘到对话里发给 AI 即可"), () => setToast("复制失败（浏览器拒绝剪贴板）"));
 									},
 									children: "复制这段话"
 								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 									type: "button",
-									className: "ns-btn",
+									className: "pc-btn",
 									onClick: () => wb.reload(),
 									children: "我已经建好了，重新扫描"
 								})]
@@ -2173,14 +2173,14 @@ window.__ModuleLoader__.load({
 						]
 					}) : null,
 					!isMin && scan.phase === "empty" ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: "ns-onboard",
+						className: "pc-onboard",
 						children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: "ns-onboard-t",
+								className: "pc-onboard-t",
 								children: "对照工作台里还没有版本"
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: "ns-page-d",
+								className: "pc-page-d",
 								children: [
 									"目录建好了，但里面还没有 ",
 									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("b", { children: "v1/" }),
@@ -2188,10 +2188,10 @@ window.__ModuleLoader__.load({
 								]
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: "ns-onboard-act",
+								className: "pc-onboard-act",
 								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 									type: "button",
-									className: "ns-btn",
+									className: "pc-btn",
 									onClick: () => wb.reload(),
 									children: "重新扫描"
 								})
@@ -2199,41 +2199,41 @@ window.__ModuleLoader__.load({
 						]
 					}) : null,
 					!isMin && scan.phase === "ready" ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: "ns-wb-cols",
+						className: "pc-wb-cols",
 						ref: colsRef,
 						onMouseUp: onPromptMouseUp,
 						children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: "ns-col ns-col-src",
+								className: "pc-col pc-col-src",
 								style: { width: srcW },
 								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-									className: "ns-col-hd",
+									className: "pc-col-hd",
 									children: [
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: "剧本" }),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "ns-spacer" }),
+										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "pc-spacer" }),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-											className: "ns-sub",
+											className: "pc-sub",
 											children: [script.phase === "ready" ? `${script.totalLines} 行` : script.phase === "loading" ? "读取中…" : "—", " · 只读参考"]
 										})
 									]
 								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-									className: "ns-col-bd",
+									className: "pc-col-bd",
 									ref: scriptRef,
 									children: script.phase !== "ready" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-										className: "ns-empty",
+										className: "pc-empty",
 										children: script.phase === "loading" ? "正在读取这一集剧本…" : script.error || "读不到这一集剧本"
 									}) : script.lines.map((text, index) => {
 										const ln = index + 1;
 										return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 											"data-ln": ln,
-											className: `ns-sline${highlightLines.has(ln) ? " ns-hl" : ""}`,
+											className: `pc-sline${highlightLines.has(ln) ? " pc-hl" : ""}`,
 											onMouseEnter: () => setHoverLine(ln),
 											onMouseLeave: () => setHoverLine((prev) => prev === ln ? null : prev),
 											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-												className: "ns-ln",
+												className: "pc-ln",
 												children: ln
 											}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-												className: "ns-stx",
+												className: "pc-stx",
 												children: text
 											})]
 										}, ln);
@@ -2241,14 +2241,14 @@ window.__ModuleLoader__.load({
 								})]
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: "ns-split",
+								className: "pc-split",
 								onMouseDown: (e) => startColDrag(e, "src"),
 								title: "拖动调整宽度"
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: "ns-col ns-col-prompt",
+								className: "pc-col pc-col-prompt",
 								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-									className: "ns-col-hd",
+									className: "pc-col-hd",
 									children: [
 										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: [
 											"提示词 · 第 ",
@@ -2256,100 +2256,100 @@ window.__ModuleLoader__.load({
 											" 集 · ",
 											versionLabel
 										] }),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "ns-spacer" }),
+										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "pc-spacer" }),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: "ns-sub",
+											className: "pc-sub",
 											children: blk.phase === "ready" ? `${blk.blocks.length} 块` : blk.phase === "loading" ? "读取中…" : "—"
 										})
 									]
 								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-									className: "ns-col-bd",
+									className: "pc-col-bd",
 									ref: promptRef,
 									children: blk.phase !== "ready" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-										className: "ns-empty",
+										className: "pc-empty",
 										children: blk.phase === "loading" ? "正在读取这一集提示词…" : middleEmpty
 									}) : blk.blocks.map((block) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										"data-paragraph": block.index,
-										className: `ns-para${pinnedBlocks.includes(block.index) ? " ns-para-pinned" : ""}${pendingBlocks.has(block.index) ? " ns-para-pending" : ""}${hoverBlockIndices.has(block.index) ? " ns-para-hover" : ""}`,
+										className: `pc-para${pinnedBlocks.includes(block.index) ? " pc-para-pinned" : ""}${pendingBlocks.has(block.index) ? " pc-para-pending" : ""}${hoverBlockIndices.has(block.index) ? " pc-para-hover" : ""}`,
 										onMouseEnter: () => setHoverBlock(block.index),
 										onMouseLeave: () => setHoverBlock((prev) => prev === block.index ? null : prev),
 										onClick: () => setPinnedBlocks((prev) => prev.length === 1 && prev[0] === block.index ? [] : [block.index]),
 										title: block.scriptRanges === null ? "剧本里没有对应（新增）" : `对应剧本 ${block.scriptRanges.map((r) => `L${r[0]}–L${r[1]}`).join("、")}`,
 										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-											className: "ns-blk-hd",
+											className: "pc-blk-hd",
 											children: [
 												/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-													className: "ns-blk-no",
+													className: "pc-blk-no",
 													children: ["块 ", block.index]
 												}),
 												/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-													className: "ns-blk-anchor",
+													className: "pc-blk-anchor",
 													title: block.anchor,
 													children: block.anchor
 												}),
 												/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-													className: `ns-para-src${block.scriptRanges === null ? " ns-para-new" : ""}`,
+													className: `pc-para-src${block.scriptRanges === null ? " pc-para-new" : ""}`,
 													children: scriptLabelOf(block)
 												})
 											]
 										}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: "ns-para-tx",
+											className: "pc-para-tx",
 											children: blockBody(block, missingAnchor.has(block.index))
 										})]
 									}, block.index))
 								})]
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: "ns-split",
+								className: "pc-split",
 								onMouseDown: (e) => startColDrag(e, "anno"),
 								title: "拖动调整宽度"
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: "ns-col ns-col-anno",
+								className: "pc-col pc-col-anno",
 								style: { width: annoW },
 								children: [
 									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-										className: "ns-col-hd",
+										className: "pc-col-hd",
 										children: [
 											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: "批注" }),
-											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "ns-spacer" }),
+											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "pc-spacer" }),
 											/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-												className: "ns-seg",
+												className: "pc-seg",
 												children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 													type: "button",
-													className: annoScope === "episode" ? "ns-seg-on" : "",
+													className: annoScope === "episode" ? "pc-seg-on" : "",
 													title: "只看当前这一集",
 													onClick: () => setAnnoScope("episode"),
 													children: "按集"
 												}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 													type: "button",
-													className: annoScope === "all" ? "ns-seg-on" : "",
+													className: annoScope === "all" ? "pc-seg-on" : "",
 													title: "看这一版所有集的批注",
 													onClick: () => setAnnoScope("all"),
 													children: "全部"
 												})]
 											}),
 											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-												className: "ns-sub",
+												className: "pc-sub",
 												children: annoScope === "all" ? `${allCount} 条` : `${anno.annotations.length} 条`
 											})
 										]
 									}),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-										className: "ns-col-bd",
+										className: "pc-col-bd",
 										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-											className: "ns-empty",
+											className: "pc-empty",
 											children: "在提示词里划选一段文字（Ctrl 可以连着选几处不连续的）， 批注框会在选区下方浮出来。"
 										}), annoScope === "episode" ? anno.annotations.map((a) => annotationCard(a)) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 											allError === "" ? null : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-												className: "ns-empty",
+												className: "pc-empty",
 												children: ["读批注出错：", allError]
 											}),
 											(version?.episodes ?? []).map((item) => {
 												const list = allAnnotations[item.episode] ?? [];
 												if (list.length === 0) return null;
 												return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-													className: "ns-anno-group",
+													className: "pc-anno-group",
 													children: [
 														"第 ",
 														item.episode,
@@ -2360,16 +2360,16 @@ window.__ModuleLoader__.load({
 												}), list.map((a) => annotationCard(a, item.episode))] }, item.episode);
 											}),
 											allCount === 0 && allError === "" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-												className: "ns-empty",
+												className: "pc-empty",
 												children: "这一版还没有任何批注。"
 											}) : null
 										] })]
 									}),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-										className: "ns-col-foot",
+										className: "pc-col-foot",
 										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
 											type: "button",
-											className: "ns-btn ns-btn-primary",
+											className: "pc-btn pc-btn-primary",
 											disabled: sendCount === 0,
 											title: sendCount === 0 ? "还没有批注" : "把这一批批注整理成指令复制到剪贴板",
 											onClick: sendBatch,
@@ -2379,7 +2379,7 @@ window.__ModuleLoader__.load({
 												" 条批注"
 											]
 										}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-											className: "ns-foot-hint",
+											className: "pc-foot-hint",
 											children: annoScope === "all" ? "这一版所有集的批注一起下发" : "复制成指令 → 粘到对话里发给 AI"
 										})]
 									})
@@ -2388,12 +2388,12 @@ window.__ModuleLoader__.load({
 						]
 					}) : null,
 					toast === "" ? null : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: "ns-toast",
+						className: "pc-toast",
 						children: toast
 					})
 				]
 			}), pending !== null && pending.open && !isMin ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: "ns-pop2",
+				className: "pc-pop2",
 				ref: popRef,
 				style: {
 					left: pending.x,
@@ -2402,17 +2402,17 @@ window.__ModuleLoader__.load({
 				},
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: "ns-pop2-hd",
+						className: "pc-pop2-hd",
 						children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: pending.regions.length > 1 ? `已选 ${pending.regions.length} 处` : pending.regions[0] === void 0 ? "没有选中" : regionLabel(pending.regions[0]) }),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "ns-spacer" }),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "pc-spacer" }),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: "ns-pop2-hint",
+								className: "pc-pop2-hint",
 								children: "按住 Ctrl 可再选别处"
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
-								className: "ns-x",
+								className: "pc-x",
 								title: "关掉",
 								onClick: closePending,
 								children: "✕"
@@ -2420,12 +2420,12 @@ window.__ModuleLoader__.load({
 						]
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: "ns-pop2-list",
+						className: "pc-pop2-list",
 						children: pending.regions.map((region, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: "ns-pop2-q",
+							className: "pc-pop2-q",
 							children: [
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-									className: "ns-acard-ln",
+									className: "pc-acard-ln",
 									children: regionLabel(region)
 								}),
 								"“",
@@ -2435,7 +2435,7 @@ window.__ModuleLoader__.load({
 						}, `${region.paragraph}-${index}`))
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("textarea", {
-						className: "ns-editor-t",
+						className: "pc-editor-t",
 						placeholder: "这里有什么问题？（一句话就行）",
 						value: problem,
 						autoFocus: true,
@@ -2446,18 +2446,18 @@ window.__ModuleLoader__.load({
 						}
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: "ns-editor-act",
+						className: "pc-editor-act",
 						children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
-								className: "ns-btn",
+								className: "pc-btn",
 								onClick: closePending,
 								children: "取消"
 							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "ns-spacer" }),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "pc-spacer" }),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
-								className: "ns-btn ns-btn-primary",
+								className: "pc-btn pc-btn-primary",
 								disabled: anno.saving,
 								onClick: submitAnnotation,
 								children: anno.saving ? "保存中…" : "加入批注"
@@ -2488,7 +2488,7 @@ window.__ModuleLoader__.load({
 		* 规则：
 		*   · **只用 DSH 主题变量**（--dsw-alias-*）并带 fallback，不写死颜色——
 		*     写死的话切浅色主题就瞎了。变量名都是实测过的，不是猜的。
-		*   · 类名统一 ns- 前缀，避免和官方样式撞车。
+		*   · 类名统一 pc- 前缀，避免和官方样式撞车。
 		*   · 尺寸取官方实测值（输入卡 22px 圆角、气泡 22px、行高 22/24px）。
 		*   · ⚠️ 改这个文件时注意两件事：
 		*     1. **别把选择器写重复**（人家踩过：补丁式追加导致大半段定义两遍，
@@ -2499,50 +2499,50 @@ window.__ModuleLoader__.load({
 		* 结构：根层 → 通用小件 → 工作台窗口 → 三栏 → 剧本行 → 提示词块（含块抬头）→
 		*       批注区 → 划词弹卡 → 缩放手柄 → 提示条 → 滚动条
 		*
-		* ⚠️ 这一版**删掉了覆盖竖条**（.ns-coverbar，以及原来只为给它当定位祖先的
-		*    `.ns-col-src .ns-col-bd { position: relative }`）：设计文档 §2.2 明确不做
+		* ⚠️ 这一版**删掉了覆盖竖条**（.pc-coverbar，以及原来只为给它当定位祖先的
+		*    `.pc-col-src .pc-col-bd { position: relative }`）：设计文档 §2.2 明确不做
 		*    "整集覆盖范围"这件事 —— 这里没有"覆盖"，只有"当前这一块引用了剧本哪几行"，
-		*    用行底色（.ns-sline.ns-hl）表达就够。
+		*    用行底色（.pc-sline.pc-hl）表达就够。
 		*/
 		const overlayCss = `
 /* ══════════════════════════════════════════════════════════════════════
    根层：铺满视口，但**不拦截鼠标**（空白处穿透到官方界面）
    ⚠️ 这一层必须是 none，面板自己才是 auto。写反了会「整屏点不动」。
    ══════════════════════════════════════════════════════════════════════ */
-.ns-root { position: absolute; inset: 0; pointer-events: none; }
+.pc-root { position: absolute; inset: 0; pointer-events: none; }
 
 /* ── 通用小件 ───────────────────────────────────────────────────────── */
-.ns-spacer { flex: 1; }
-.ns-x {
+.pc-spacer { flex: 1; }
+.pc-x {
   background: none; border: none; padding: 1px 6px; border-radius: 6px; cursor: pointer;
   font: inherit; font-size: 12px; color: var(--dsw-alias-label-caption);
 }
-.ns-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.ns-x:disabled { opacity: .35; cursor: default; }
-.ns-x:disabled:hover { background: transparent; }
-.ns-x-del:hover { color: var(--dsw-alias-state-error-primary); }
-.ns-btn {
+.pc-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.pc-x:disabled { opacity: .35; cursor: default; }
+.pc-x:disabled:hover { background: transparent; }
+.pc-x-del:hover { color: var(--dsw-alias-state-error-primary); }
+.pc-btn {
   padding: 4px 12px; border-radius: 8px; font: inherit; font-size: 12px; cursor: pointer;
   border: 1px solid var(--dsw-alias-border-l2); background: transparent; color: inherit;
 }
-.ns-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
-.ns-btn-primary { background: var(--dsw-alias-state-business-primary); color: #fff; border-color: transparent; }
-.ns-btn-primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--dsw-alias-state-business-primary); }
-.ns-btn:disabled { opacity: .42; cursor: not-allowed; }
+.pc-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.pc-btn-primary { background: var(--dsw-alias-state-business-primary); color: #fff; border-color: transparent; }
+.pc-btn-primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--dsw-alias-state-business-primary); }
+.pc-btn:disabled { opacity: .42; cursor: not-allowed; }
 
 /* 标签（批注卡上的小圆角块） */
-.ns-tag {
+.pc-tag {
   font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 999px;
   border: 1px solid currentColor; background: transparent; cursor: default;
 }
-button.ns-tag { cursor: pointer; }
+button.pc-tag { cursor: pointer; }
 /* 选中态：底色取该类型自己的颜色，文字反过来用浮层底色 */
-button.ns-tag.ns-on { background: currentColor; color: var(--dsw-alias-bg-overlay); }
+button.pc-tag.pc-on { background: currentColor; color: var(--dsw-alias-bg-overlay); }
 
 /* ══════════════════════════════════════════════════════════════════════
    工作台窗口：可拖、可缩放；默认铺满对话区
    ══════════════════════════════════════════════════════════════════════ */
-.ns-workbench {
+.pc-workbench {
   position: absolute;
   display: flex; flex-direction: column; min-height: 0; min-width: 0;
   border-radius: 14px; overflow: hidden;
@@ -2550,16 +2550,16 @@ button.ns-tag.ns-on { background: currentColor; color: var(--dsw-alias-bg-overla
   border: 1px solid var(--dsw-alias-border-l2);
   box-shadow: 0 22px 60px rgba(0,0,0,.34), 0 6px 18px rgba(0,0,0,.18);
   color: var(--dsw-alias-label-primary);
-  font: 13px/1.65 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
-  /* 面板自己接管鼠标事件（父层 .ns-root 是 none 的穿透层） */
+  font: 13px/1.65 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sapc-serif;
+  /* 面板自己接管鼠标事件（父层 .pc-root 是 none 的穿透层） */
   pointer-events: auto;
 }
 /* 划词时**用插件自己的选中样式**，不用浏览器默认那套。
    低透明度叠在正文上，浅色/深色主题都成立；只作用于工作台与批注框内部，
    官方对话区的选中样式一点都不动。 */
-.ns-workbench ::selection,
-.ns-pop2 ::selection,
-.ns-pop2::selection {
+.pc-workbench ::selection,
+.pc-pop2 ::selection,
+.pc-pop2::selection {
   background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 34%, transparent);
   color: var(--dsw-alias-label-primary);
 }
@@ -2578,7 +2578,7 @@ button.ns-tag.ns-on { background: currentColor; color: var(--dsw-alias-bg-overla
    ui-primitives/Button.module.css 的 .primary / .primary:hover
    （fill + label-primary-foreground）。
    文字与图标**整组居中**，形状仍是完整胶囊（高 36 = 圆角 18 的两倍）。 */
-.ns-workbench.ns-min {
+.pc-workbench.pc-min {
   overflow: hidden;
   border: none;
   border-radius: 18px;
@@ -2591,9 +2591,9 @@ button.ns-tag.ns-on { background: currentColor; color: var(--dsw-alias-bg-overla
      1. **标题栏要铺满胶囊**（height: 100%）。它是 flex: none，默认只占内容高度
         （约 20px），而胶囊高 36px —— 于是文字贴在上边。align-items: center
         一直在生效，只是没有高度可居。
-     2. 标题栏里那个 .ns-spacer（flex:1）在收起状态下还在，会把文字顶到左边，
+     2. 标题栏里那个 .pc-spacer（flex:1）在收起状态下还在，会把文字顶到左边，
         所以也藏掉；按钮改成绝对定位贴右边缘。 */
-.ns-workbench.ns-min .ns-wb-hd {
+.pc-workbench.pc-min .pc-wb-hd {
   position: relative;
   height: 100%;
   box-sizing: border-box;
@@ -2605,56 +2605,56 @@ button.ns-tag.ns-on { background: currentColor; color: var(--dsw-alias-bg-overla
   justify-content: center;
   cursor: grab;
 }
-.ns-workbench.ns-min .ns-spacer { display: none; }
-.ns-workbench.ns-min .ns-wb-hd .ns-x {
+.pc-workbench.pc-min .pc-spacer { display: none; }
+.pc-workbench.pc-min .pc-wb-hd .pc-x {
   position: absolute; right: 6px; top: 0; bottom: 0; margin: auto 0;
   height: 24px;
 }
-.ns-workbench.ns-min .ns-wb-hd:active { cursor: grabbing; }
+.pc-workbench.pc-min .pc-wb-hd:active { cursor: grabbing; }
 /* 收起时的标题：跟主题色走（currentColor 来自上面），字号也放大一档 */
-.ns-workbench.ns-min .ns-t {
+.pc-workbench.pc-min .pc-t {
   font-size: 13.5px;
   font-weight: 500;
   line-height: 1;
   color: currentColor;
 }
-.ns-workbench.ns-min .ns-x { color: currentColor; }
-.ns-workbench.ns-min .ns-x:hover {
+.pc-workbench.pc-min .pc-x { color: currentColor; }
+.pc-workbench.pc-min .pc-x:hover {
   background: color-mix(in srgb, currentColor 22%, transparent);
   color: currentColor;
 }
-.ns-workbench.ns-min .ns-wb-cols { display: none; }
-.ns-workbench.ns-min .ns-rs { display: none; }
+.pc-workbench.pc-min .pc-wb-cols { display: none; }
+.pc-workbench.pc-min .pc-rs { display: none; }
 /* 收起时只藏「元信息」和拖动手柄；标题与按钮保留（按钮要保持可点） */
-.ns-workbench.ns-min .ns-meta,
-.ns-workbench.ns-min .ns-hint,
-.ns-workbench.ns-min .ns-grip { display: none; }
+.pc-workbench.pc-min .pc-meta,
+.pc-workbench.pc-min .pc-hint,
+.pc-workbench.pc-min .pc-grip { display: none; }
 
-.ns-wb-hd {
+.pc-wb-hd {
   flex: none; display: flex; align-items: center; gap: 8px; padding: 7px 10px;
   border-bottom: 1px solid var(--dsw-alias-border-l1);
   background: var(--dsw-specific-sidebar-fill, var(--dsw-alias-bg-layer-1));
   cursor: move; user-select: none;
 }
-.ns-grip { color: var(--dsw-alias-label-caption); letter-spacing: -2px; font-size: 11px; }
-.ns-t { font-size: 12px; font-weight: 600; white-space: nowrap; }
-.ns-meta { font-size: 11px; color: var(--dsw-alias-label-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ns-hint { font-size: 10.5px; color: var(--dsw-alias-label-caption); white-space: nowrap; }
+.pc-grip { color: var(--dsw-alias-label-caption); letter-spacing: -2px; font-size: 11px; }
+.pc-t { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pc-meta { font-size: 11px; color: var(--dsw-alias-label-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-hint { font-size: 10.5px; color: var(--dsw-alias-label-caption); white-space: nowrap; }
 /* 数据来源标记（官方 Tag 规格：小、圆角、次要字色） */
-.ns-badge {
+.pc-badge {
   flex: none;
   font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 8px;
   color: var(--dsw-alias-label-tertiary);
   background: var(--dsw-alias-bg-layer-2);
   white-space: nowrap;
 }
-.ns-badge-demo {
+.pc-badge-demo {
   color: var(--dsw-alias-state-warn-primary);
   box-shadow: inset 0 0 0 1px currentColor;
   background: transparent;
 }
 /* 版本 / 集选择器：弄成官方那种小尺寸，别抢标题栏的注意力 */
-.ns-sel {
+.pc-sel {
   flex: none;
   height: 22px;
   max-width: 200px;
@@ -2667,11 +2667,11 @@ button.ns-tag.ns-on { background: currentColor; color: var(--dsw-alias-bg-overla
   border-radius: 6px;
   cursor: pointer;
 }
-.ns-sel:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
-.ns-sel:disabled { opacity: .5; cursor: not-allowed; }
+.pc-sel:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.pc-sel:disabled { opacity: .5; cursor: not-allowed; }
 
 /* 扫描诊断条：常驻可见（出问题时主人一眼就能看到，不用 hover） */
-.ns-scanbar {
+.pc-scanbar {
   flex: none;
   display: flex; align-items: center; gap: 8px;
   padding: 3px 10px; font-size: 10.5px;
@@ -2679,98 +2679,98 @@ button.ns-tag.ns-on { background: currentColor; color: var(--dsw-alias-bg-overla
   border-bottom: 1px solid var(--dsw-alias-border-l1);
   color: var(--dsw-alias-label-tertiary);
 }
-.ns-scanbar-k { flex: none; font-weight: 600; color: var(--dsw-alias-label-secondary); }
-.ns-scanbar-v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-scanbar-k { flex: none; font-weight: 600; color: var(--dsw-alias-label-secondary); }
+.pc-scanbar-v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 上手引导卡：工作台目录还没建时占据主区，把 DSH 的实际流程讲清楚 */
-.ns-onboard {
+.pc-onboard {
   flex: 1;
   display: flex; flex-direction: column; justify-content: center; gap: 10px;
   padding: 24px 32px; overflow-y: auto;
   color: var(--dsw-alias-label-secondary);
 }
-.ns-onboard-t { font-size: 13.5px; font-weight: 600; color: var(--dsw-alias-label-primary); }
-.ns-onboard-l { margin: 0; padding-left: 20px; font-size: 12.5px; line-height: 2; }
-.ns-onboard-l b { color: var(--dsw-alias-state-business-primary); }
-.ns-onboard-l code {
+.pc-onboard-t { font-size: 13.5px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+.pc-onboard-l { margin: 0; padding-left: 20px; font-size: 12.5px; line-height: 2; }
+.pc-onboard-l b { color: var(--dsw-alias-state-business-primary); }
+.pc-onboard-l code {
   font-family: ui-monospace, Consolas, monospace; font-size: 11.5px;
   background: var(--dsw-alias-bg-layer-2); border-radius: 4px; padding: 1px 5px;
 }
-.ns-onboard-n {
+.pc-onboard-n {
   font-size: 11px; color: var(--dsw-alias-label-caption);
   border-top: 1px solid var(--dsw-alias-border-l1); padding-top: 8px;
 }
 
 /* ── 三栏 ───────────────────────────────────────────────────────────── */
-.ns-wb-cols { flex: 1; min-height: 0; display: flex; }
-.ns-col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.ns-col-src { flex: none; background: var(--dsw-alias-bg-layer-1); }
-.ns-col-prompt { flex: 1; }
-.ns-col-anno { flex: none; background: var(--dsw-alias-bg-layer-1); }
-.ns-col-hd {
+.pc-wb-cols { flex: 1; min-height: 0; display: flex; }
+.pc-col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.pc-col-src { flex: none; background: var(--dsw-alias-bg-layer-1); }
+.pc-col-prompt { flex: 1; }
+.pc-col-anno { flex: none; background: var(--dsw-alias-bg-layer-1); }
+.pc-col-hd {
   flex: none; display: flex; align-items: center; gap: 6px; padding: 6px 12px;
   border-bottom: 1px solid var(--dsw-alias-border-l1);
   font-size: 10.5px; font-weight: 600; letter-spacing: .05em;
   color: var(--dsw-alias-label-tertiary); white-space: nowrap;
 }
-.ns-sub { font-weight: 400; letter-spacing: 0; }
-.ns-col-bd { flex: 1; overflow-y: auto; padding: 11px 14px 30px; }
+.pc-sub { font-weight: 400; letter-spacing: 0; }
+.pc-col-bd { flex: 1; overflow-y: auto; padding: 11px 14px 30px; }
 
 /* 列宽把手 */
-.ns-split {
+.pc-split {
   flex: none; width: 11px; margin: 0 -5.5px; z-index: 3;
   cursor: col-resize; position: relative; align-self: stretch;
 }
-.ns-split::after {
+.pc-split::after {
   content: ''; position: absolute; top: 0; bottom: 0; left: 5px; width: 1px;
   background: var(--dsw-alias-border-l1); transition: background .12s;
 }
-.ns-split:hover::after { background: var(--dsw-alias-state-business-primary); }
-.ns-split:hover { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent); }
-body.ns-colresizing { cursor: col-resize; user-select: none; }
+.pc-split:hover::after { background: var(--dsw-alias-state-business-primary); }
+.pc-split:hover { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent); }
+body.pc-colresizing { cursor: col-resize; user-select: none; }
 
 /* ── 剧本行（左栏，只读参考）─────────────────────────────────────────
    高亮只有一条规则：**当前这一块引用了这几行**（悬停/点中栏某块；
-   或悬停左栏某行时反过来高亮中栏的那几个块，那在中栏是 .ns-para-hover）。
+   或悬停左栏某行时反过来高亮中栏的那几个块，那在中栏是 .pc-para-hover）。
    ⚠️ 左栏**不可划词、不可批注**，所以这里没有"待批注"那类底色。 */
-.ns-sline { display: flex; gap: 8px; border-radius: 4px; padding: 1px 0; }
-.ns-sline.ns-hl {
+.pc-sline { display: flex; gap: 8px; border-radius: 4px; padding: 1px 0; }
+.pc-sline.pc-hl {
   background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 26%, transparent);
 }
-.ns-ln {
+.pc-ln {
   flex: none; width: 32px; text-align: right; font-size: 12px; line-height: 1.95;
   color: var(--dsw-alias-label-tertiary); user-select: none;
   font-family: ui-monospace, Consolas, monospace;
 }
 /* 正文提亮：原来用 label-secondary，主人反馈"太暗、看着难受" */
-.ns-stx { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.95; color: var(--dsw-alias-label-primary); }
+.pc-stx { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.95; color: var(--dsw-alias-label-primary); }
 
 /* ── 提示词块（中栏，作业区）─────────────────────────────────────────
    一个块 = 清单里的一条：抬头（块 N + 正文首行 + 指向剧本哪儿）+ 正文。
    正文是划词/批注的对象；抬头**不许被划进选区**（见下面的 user-select）。 */
-.ns-para {
+.pc-para {
   position: relative;
   display: flex; flex-direction: column; gap: 2px;
   border-radius: 6px; padding: 5px 8px 6px; margin-bottom: 3px;
   cursor: default;
 }
-.ns-para:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.pc-para:hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* 当前正在看的那几块（点选/定位）：**底色块**，和左侧剧本对应行同一种表示法。 */
-.ns-para-pinned {
+.pc-para-pinned {
   background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 22%, transparent);
 }
 /* 悬停左栏某行时，反过来把"引用了这一行的块"标出来（联动方向二）。
    比"正在看"浅一档，免得和真正的点选混在一起。 */
-.ns-para-hover {
+.pc-para-hover {
   background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
 }
 /* Ctrl 连选期间被选中的块：比"当前在看"的色块更深一档。
    这段时间输入框是**不弹**的（见 Workbench 的 onPromptMouseUp），
    屏幕上就靠这层底色告诉用户"我选了哪几处"。 */
-.ns-para-pending {
+.pc-para-pending {
   background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, transparent);
 }
-.ns-para-broken { opacity: .7; }
+.pc-para-broken { opacity: .7; }
 /* 块抬头：块的位置序号 + 正文首行原样 + 指向剧本哪儿。
    ⚠️ user-select: none 是必须的 —— 抬头要是能划进选区，quote 里就会混进
       "块 12" 和 "→ 剧本 L3–L4"，回给 agent 的引文就不干净了。
@@ -2779,213 +2779,213 @@ body.ns-colresizing { cursor: col-resize; user-select: none; }
       ⚠️ 主人 2026-09-14：原来 10.5px 太小、而且整条都是灰的。抬头是**扫读的路标**，
       字号提到 12.5px，"块 N" 与剧本行号用**主题色**，只有中间那段正文首行留次要色
       （它是内容摘录，不该跟路标抢注意力）。 */
-.ns-blk-hd {
+.pc-blk-hd {
   display: flex; align-items: baseline; gap: 8px;
   font-size: 12.5px; line-height: 1.9;
   user-select: none;
 }
-.ns-blk-no {
+.pc-blk-no {
   flex: none; font-weight: 600;
   color: var(--dsw-alias-state-business-primary);
 }
 /* 正文首行：一眼认出"这是哪一块"，太长就省略号 */
-.ns-blk-anchor {
+.pc-blk-anchor {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--dsw-alias-label-secondary);
 }
-/* 剧本行号跟着抬头一起放大、上主题色（它复用了 .ns-para-src 的胶囊样式） */
-.ns-blk-hd .ns-para-src {
+/* 剧本行号跟着抬头一起放大、上主题色（它复用了 .pc-para-src 的胶囊样式） */
+.pc-blk-hd .pc-para-src {
   font-size: 11.5px;
   color: var(--dsw-alias-state-business-primary);
 }
 /* "剧本里没有对应"必须留住警示色：上一条选择器更具体，这里显式压回来 */
-.ns-blk-hd .ns-para-src.ns-para-new {
+.pc-blk-hd .pc-para-src.pc-para-new {
   color: var(--dsw-alias-state-warn-primary);
 }
-.ns-para-tx { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.9; color: var(--dsw-alias-label-primary); }
-.ns-para-line { display: block; white-space: pre-wrap; }
-.ns-para-bad { color: var(--dsw-alias-state-error-primary); }
+.pc-para-tx { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.9; color: var(--dsw-alias-label-primary); }
+.pc-para-line { display: block; white-space: pre-wrap; }
+.pc-para-bad { color: var(--dsw-alias-state-error-primary); }
 /* 抬头右侧那枚小标：「→ 剧本 L7–L9」/「→ 剧本里没有对应」。
    也不能被划进选区（序号/标签被选上过一次）。 */
-.ns-para-src {
+.pc-para-src {
   flex: none; font-size: 10.5px; line-height: 1.8; padding: 0 5px; border-radius: 999px;
   color: var(--dsw-alias-label-tertiary); user-select: none;
   font-family: ui-monospace, Consolas, monospace;
 }
-.ns-para-new { color: var(--dsw-alias-state-warn-primary); }
+.pc-para-new { color: var(--dsw-alias-state-warn-primary); }
 
 /* ── 批注区 ─────────────────────────────────────────────────────────── */
-.ns-empty { padding: 16px 8px; text-align: center; font-size: 12.5px; line-height: 1.8; color: var(--dsw-alias-label-caption); }
-.ns-sec { margin-bottom: 10px; }
-.ns-sec-h { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; color: var(--dsw-alias-label-caption); padding: 5px 3px; }
-.ns-acard {
+.pc-empty { padding: 16px 8px; text-align: center; font-size: 12.5px; line-height: 1.8; color: var(--dsw-alias-label-caption); }
+.pc-sec { margin-bottom: 10px; }
+.pc-sec-h { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; color: var(--dsw-alias-label-caption); padding: 5px 3px; }
+.pc-acard {
   border: 1px solid var(--dsw-alias-border-l2); border-left-width: 3px; border-radius: 8px;
   background: var(--dsw-alias-bg-base); padding: 7px 9px; margin-bottom: 6px;
 }
-.ns-acard-draft { border-left-color: var(--dsw-alias-state-error-primary); }
-.ns-acard-sent { border-left-color: var(--dsw-alias-state-success-primary); }
-.ns-acard-r1 { display: flex; align-items: center; gap: 6px; }
-.ns-reg {
+.pc-acard-draft { border-left-color: var(--dsw-alias-state-error-primary); }
+.pc-acard-sent { border-left-color: var(--dsw-alias-state-success-primary); }
+.pc-acard-r1 { display: flex; align-items: center; gap: 6px; }
+.pc-reg {
   display: block; width: 100%; text-align: left; font: inherit; font-size: 11px; line-height: 1.5;
   background: none; border: none; border-left: 2px solid var(--dsw-alias-border-l2);
   padding: 1px 0 1px 7px; margin: 5px 0 2px; cursor: pointer;
   color: var(--dsw-alias-label-tertiary);
 }
-.ns-reg:hover { border-left-color: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-label-primary); }
-.ns-reg-ln { font-family: ui-monospace, Consolas, monospace; margin-right: 5px; }
-.ns-why { font-size: 13px; margin-top: 5px; }
-.ns-ameta { margin-top: 5px; font-size: 11.5px; color: var(--dsw-alias-label-caption); }
-.ns-col-foot { flex: none; padding: 8px 9px; border-top: 1px solid var(--dsw-alias-border-l1); }
-.ns-col-foot .ns-btn { width: 100%; justify-content: center; }
-.ns-foot-hint { margin-top: 5px; font-size: 10px; text-align: center; color: var(--dsw-alias-label-caption); }
+.pc-reg:hover { border-left-color: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-label-primary); }
+.pc-reg-ln { font-family: ui-monospace, Consolas, monospace; margin-right: 5px; }
+.pc-why { font-size: 13px; margin-top: 5px; }
+.pc-ameta { margin-top: 5px; font-size: 11.5px; color: var(--dsw-alias-label-caption); }
+.pc-col-foot { flex: none; padding: 8px 9px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.pc-col-foot .pc-btn { width: 100%; justify-content: center; }
+.pc-foot-hint { margin-top: 5px; font-size: 10px; text-align: center; color: var(--dsw-alias-label-caption); }
 
 /* ══════════════════════════════════════════════════════════════════════
    划词弹卡：**跟着选区浮出来**（位置按选区算），绝不固定在批注栏里。
-   连选期间**不飘任何浮层** —— 只靠 .ns-para-pending 那层底色报数。
+   连选期间**不飘任何浮层** —— 只靠 .pc-para-pending 那层底色报数。
    ══════════════════════════════════════════════════════════════════════ */
-.ns-pop-anchor {
+.pc-pop-anchor {
   position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center;
   z-index: 40; pointer-events: auto;
 }
 
 /* 胶囊（按住 Ctrl 累积期间）：停在底部报数 */
-.ns-pill {
+.pc-pill {
   display: flex; align-items: center; gap: 8px; padding: 5px 8px 5px 12px;
   border-radius: 999px; font-size: 12px; white-space: nowrap;
   background: var(--dsw-alias-bg-overlay); border: 1px solid var(--dsw-alias-border-l3);
   box-shadow: 0 8px 24px rgba(0,0,0,.26);
   color: var(--dsw-alias-label-primary);
 }
-.ns-pill-n { color: var(--dsw-alias-label-tertiary); white-space: nowrap; }
-.ns-pill-btn {
+.pc-pill-n { color: var(--dsw-alias-label-tertiary); white-space: nowrap; }
+.pc-pill-btn {
   border: none; border-radius: 999px; padding: 3px 11px; cursor: pointer;
   font: inherit; font-size: 12px; color: #fff;
   background: var(--dsw-alias-state-business-primary);
 }
-.ns-pill-btn:hover { filter: brightness(1.08); }
+.pc-pill-btn:hover { filter: brightness(1.08); }
 
 /* 卡片（写问题） */
-.ns-pop {
+.pc-pop {
   width: 344px;
   background: var(--dsw-alias-bg-overlay); border: 1px solid var(--dsw-alias-border-l3);
   border-radius: 11px; padding: 10px;
   box-shadow: 0 12px 32px rgba(0,0,0,.28), 0 2px 8px rgba(0,0,0,.16);
   color: var(--dsw-alias-label-primary);
-  font: 13px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font: 13px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sapc-serif;
 }
-.ns-pop-hd { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--dsw-alias-label-tertiary); margin-bottom: 6px; }
-.ns-pop-list { max-height: 96px; overflow: auto; margin-bottom: 7px; }
-.ns-pop-item {
+.pc-pop-hd { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--dsw-alias-label-tertiary); margin-bottom: 6px; }
+.pc-pop-list { max-height: 96px; overflow: auto; margin-bottom: 7px; }
+.pc-pop-item {
   display: flex; align-items: center; gap: 6px; font-size: 11.5px; line-height: 1.5;
   background: var(--dsw-alias-bg-layer-2); border-radius: 6px; padding: 4px 7px; margin-bottom: 3px;
   color: var(--dsw-alias-label-secondary);
 }
-.ns-pop-ln { flex: none; font-size: 10px; color: var(--dsw-alias-label-caption); font-family: ui-monospace, Consolas, monospace; }
-.ns-pop-tx { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ns-pop-lab { font-size: 10px; color: var(--dsw-alias-label-caption); margin: 7px 0 5px; }
-.ns-tags { display: flex; flex-wrap: wrap; gap: 5px; }
-.ns-pop-ta {
+.pc-pop-ln { flex: none; font-size: 10px; color: var(--dsw-alias-label-caption); font-family: ui-monospace, Consolas, monospace; }
+.pc-pop-tx { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-pop-lab { font-size: 10px; color: var(--dsw-alias-label-caption); margin: 7px 0 5px; }
+.pc-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.pc-pop-ta {
   width: 100%; min-height: 54px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.6;
   color: inherit; background: var(--dsw-alias-bg-layer-2);
   border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; padding: 6px 8px;
 }
-.ns-pop-ta:focus { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: -1px; }
-.ns-pop-acts { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
-.ns-pop-warn { font-size: 10.5px; color: var(--dsw-alias-state-error-primary); }
-.ns-pop-tip { font-size: 10.5px; color: var(--dsw-alias-label-caption); margin-top: 6px; }
+.pc-pop-ta:focus { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: -1px; }
+.pc-pop-acts { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.pc-pop-warn { font-size: 10.5px; color: var(--dsw-alias-state-error-primary); }
+.pc-pop-tip { font-size: 10.5px; color: var(--dsw-alias-label-caption); margin-top: 6px; }
 
 /* ── 缩放手柄：贴在边框上，够宽好点中 ───────────────────────────────── */
-.ns-rs { position: absolute; z-index: 5; }
-.ns-rs-r { top: 8px; right: 0; bottom: 14px; width: 7px; cursor: ew-resize; }
-.ns-rs-b { left: 8px; right: 14px; bottom: 0; height: 7px; cursor: ns-resize; }
-.ns-rs-br {
+.pc-rs { position: absolute; z-index: 5; }
+.pc-rs-r { top: 8px; right: 0; bottom: 14px; width: 7px; cursor: ew-resize; }
+.pc-rs-b { left: 8px; right: 14px; bottom: 0; height: 7px; cursor: pc-resize; }
+.pc-rs-br {
   right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize;
   /* 右下角一道斜纹，暗示这里能拉 */
   background: linear-gradient(135deg, transparent 45%,
     var(--dsw-alias-border-l3) 45%, var(--dsw-alias-border-l3) 55%, transparent 55%);
 }
-.ns-rs:hover { background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 16%, transparent); }
-.ns-rs-br:hover { background-color: transparent; }
-body.ns-dragging { cursor: grabbing; user-select: none; }
-body.ns-resizing { user-select: none; }
+.pc-rs:hover { background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 16%, transparent); }
+.pc-rs-br:hover { background-color: transparent; }
+body.pc-dragging { cursor: grabbing; user-select: none; }
+body.pc-resizing { user-select: none; }
 
 /* ── 提示条（复制成功之类）──────────────────────────────────────────── */
-.ns-toast {
+.pc-toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
   display: flex; align-items: center; gap: 8px; z-index: 70; pointer-events: auto;
   padding: 7px 13px; border-radius: 9px; font-size: 12px;
   background: var(--dsw-alias-bg-overlay); border: 1px solid var(--dsw-alias-border-l3);
   box-shadow: 0 8px 24px rgba(0,0,0,.24); color: var(--dsw-alias-label-primary);
-  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sapc-serif;
 }
 
-/* ══ 设置页的排版小件（.ns-page-*）════════════════════════════════════
+/* ══ 设置页的排版小件（.pc-page-*）════════════════════════════════════
    这一版**不注册设置页**（设计文档 §9 只要那三个席位）。这份小件保留着，
-   是因为未登记时的引导卡里那段说明的 class 就叫 ns-page-d；
+   是因为未登记时的引导卡里那段说明的 class 就叫 pc-page-d；
    哪天要加设置页，排版也还是这几条。 */
-.ns-page {
+.pc-page {
   display: flex; flex-direction: column; gap: 8px;
   padding: 4px 0;
   color: var(--dsw-alias-label-primary);
-  font: 13px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font: 13px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sapc-serif;
 }
-.ns-page-t { font-size: 14px; font-weight: 500; }
-.ns-page-d { font-size: 12px; color: var(--dsw-alias-label-tertiary); }
-.ns-page-note {
+.pc-page-t { font-size: 14px; font-weight: 500; }
+.pc-page-d { font-size: 12px; color: var(--dsw-alias-label-tertiary); }
+.pc-page-note {
   font-size: 11.5px; color: var(--dsw-alias-state-warn-primary);
   background: var(--dsw-alias-bg-layer-2); border-radius: 7px; padding: 5px 9px;
 }
-.ns-page-empty { font-size: 12px; color: var(--dsw-alias-label-caption); }
-.ns-page-list { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
-.ns-page-item {
+.pc-page-empty { font-size: 12px; color: var(--dsw-alias-label-caption); }
+.pc-page-list { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
+.pc-page-item {
   display: flex; align-items: center; gap: 9px;
   padding: 7px 9px; border-radius: 9px; cursor: pointer;
   border: 1px solid var(--dsw-alias-border-l1);
   font-size: 12.5px;
 }
-.ns-page-item:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.ns-page-item-on {
+.pc-page-item:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.pc-page-item-on {
   border-color: var(--dsw-alias-state-business-primary);
   background: var(--dsw-alias-bg-layer-2);
 }
-.ns-page-item input { flex: none; cursor: pointer; }
-.ns-page-name { flex: none; font-weight: 500; }
-.ns-page-path {
+.pc-page-item input { flex: none; cursor: pointer; }
+.pc-page-name { flex: none; font-weight: 500; }
+.pc-page-path {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: ui-monospace, Consolas, monospace; font-size: 11px;
   color: var(--dsw-alias-label-caption);
 }
-.ns-page-cur {
+.pc-page-cur {
   flex: none; font-size: 10px; padding: 0 6px; border-radius: 999px;
   color: var(--dsw-alias-state-business-primary);
   box-shadow: inset 0 0 0 1px currentColor;
 }
-.ns-page-foot {
+.pc-page-foot {
   margin-top: 4px; padding-top: 8px;
   border-top: 1px solid var(--dsw-alias-border-l1);
   font-size: 11px; color: var(--dsw-alias-label-caption);
 }
 
 /* ══ 会话标题栏上的「提示词对照」按钮 ═════════════════════════════════
-   渲染在官方会话标题栏里（不在 .ns-workbench 内），所以颜色/字体自己声明。
+   渲染在官方会话标题栏里（不在 .pc-workbench 内），所以颜色/字体自己声明。
    尺寸对齐官方那排小按钮：高 26、圆角 8、次要字色、hover 有底。 */
-.ns-hbtn {
+.pc-hbtn {
   display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px;
-  font: 12px/1 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font: 12px/1 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sapc-serif;
   color: var(--dsw-alias-label-secondary);
   background: transparent; border: none; border-radius: 8px; cursor: pointer;
   position: relative; white-space: nowrap;
 }
-.ns-hbtn:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.ns-hbtn-on { color: var(--dsw-alias-state-business-primary); }
-.ns-hbtn-dot {
+.pc-hbtn:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.pc-hbtn-on { color: var(--dsw-alias-state-business-primary); }
+.pc-hbtn-dot {
   width: 5px; height: 5px; border-radius: 50%;
   background: var(--dsw-alias-state-business-primary);
 }
 
 /* 未登记时给主人复制的指令块 */
-.ns-copy {
+.pc-copy {
   margin: 0; padding: 10px 12px; max-height: 220px; overflow: auto;
   font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; line-height: 1.7;
   color: var(--dsw-alias-label-secondary);
@@ -2994,48 +2994,48 @@ body.ns-resizing { user-select: none; }
   white-space: pre-wrap; word-break: break-word;
 }
 /* 上手引导卡上的按钮排 */
-.ns-onboard-act { display: flex; gap: 8px; margin-top: 4px; }
+.pc-onboard-act { display: flex; gap: 8px; margin-top: 4px; }
 
 /* ── 清单体检条（agent 登记的问题要显式可见，不能静默）───────────────── */
-.ns-issues {
+.pc-issues {
   display: flex; align-items: center; gap: 8px;
   margin: 0 12px 6px; padding: 5px 9px;
   border-radius: 8px; font-size: 11.5px;
   background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent);
   color: var(--dsw-alias-label-secondary);
 }
-.ns-issues-err {
+.pc-issues-err {
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 14%, transparent);
 }
-.ns-issues-t { flex: none; font-weight: 600; color: var(--dsw-alias-label-primary); }
-.ns-issues-m {
+.pc-issues-t { flex: none; font-weight: 600; color: var(--dsw-alias-label-primary); }
+.pc-issues-m {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--dsw-alias-label-tertiary);
 }
-.ns-issues-n { flex: none; color: var(--dsw-alias-label-caption); }
+.pc-issues-n { flex: none; color: var(--dsw-alias-label-caption); }
 
 /* ── 滚动条：DSH 皮肤（8px、圆角、透明轨道；浮起来的面用 l2 那对）───── */
-.ns-workbench, .ns-pop {
+.pc-workbench, .pc-pop {
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2, rgba(127,127,127,.4));
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2, rgba(127,127,127,.6));
 }
-.ns-col-bd::-webkit-scrollbar,
-.ns-pop-list::-webkit-scrollbar { width: 8px; height: 8px; }
-.ns-col-bd::-webkit-scrollbar-track,
-.ns-pop-list::-webkit-scrollbar-track { background: transparent; }
-.ns-col-bd::-webkit-scrollbar-thumb,
-.ns-pop-list::-webkit-scrollbar-thumb {
+.pc-col-bd::-webkit-scrollbar,
+.pc-pop-list::-webkit-scrollbar { width: 8px; height: 8px; }
+.pc-col-bd::-webkit-scrollbar-track,
+.pc-pop-list::-webkit-scrollbar-track { background: transparent; }
+.pc-col-bd::-webkit-scrollbar-thumb,
+.pc-pop-list::-webkit-scrollbar-thumb {
   border-radius: 999px; background: var(--dsh-scrollbar-thumb); background-clip: content-box;
 }
-.ns-col-bd::-webkit-scrollbar-thumb:hover,
-.ns-pop-list::-webkit-scrollbar-thumb:hover {
+.pc-col-bd::-webkit-scrollbar-thumb:hover,
+.pc-pop-list::-webkit-scrollbar-thumb:hover {
   background-color: var(--dsh-scrollbar-thumb-hover);
 }
 
 /* ══ 写批注的小框（跟着选区浮出来的那个）═════════════════════════════
    position: fixed —— 它挂在浮层根下（不在工作台面板里），所以不会被面板裁剪；
    left/top 由 JS 按松手时的指针位置算好并夹进视口。 */
-.ns-pop2 {
+.pc-pop2 {
   position: fixed; z-index: 60;
   display: flex; flex-direction: column; gap: 6px;
   width: 320px; box-sizing: border-box;
@@ -3047,72 +3047,72 @@ body.ns-resizing { user-select: none; }
 }
 /* 连选期间**不**放任何浮层。
    曾经在选区旁边飘过一条"已选 N 处"的提示条，被否掉了：
-   它就压在提示词文字上，把接下来要划的那几行挡住了。反馈只用 .ns-para-pending 底色。 */
-.ns-pop2-hd {
+   它就压在提示词文字上，把接下来要划的那几行挡住了。反馈只用 .pc-para-pending 底色。 */
+.pc-pop2-hd {
   display: flex; align-items: center; gap: 8px;
   font-size: 11px; color: var(--dsw-alias-label-caption);
 }
-.ns-pop2-hint { font-size: 10px; color: var(--dsw-alias-label-caption); }
+.pc-pop2-hint { font-size: 10px; color: var(--dsw-alias-label-caption); }
 /* 多选时选中的几处列在这里，太高就自己滚 */
-.ns-pop2-list { max-height: 110px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
-.ns-pop2-q {
+.pc-pop2-list { max-height: 110px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.pc-pop2-q {
   font-size: 13px; line-height: 1.6; color: var(--dsw-alias-label-primary);
   word-break: break-word;
 }
 /* 卡片上每一处引文前面的块标签 */
-.ns-acard-ln {
+.pc-acard-ln {
   flex: none; margin-right: 4px; font-size: 10.5px;
   color: var(--dsw-alias-label-caption);
   font-family: ui-monospace, Consolas, monospace;
 }
 
 /* ══ 写批注的小框（内联那一处）════════════════════════════════════════ */
-.ns-editor {
+.pc-editor {
   border: 1px solid var(--dsw-alias-state-business-primary); border-radius: 9px;
   padding: 8px 9px; margin-bottom: 10px;
   background: var(--dsw-alias-bg-base);
 }
-.ns-editor-k { font-size: 10.5px; color: var(--dsw-alias-label-caption); margin-bottom: 2px; }
-.ns-editor-q {
+.pc-editor-k { font-size: 10.5px; color: var(--dsw-alias-label-caption); margin-bottom: 2px; }
+.pc-editor-q {
   font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-primary);
   margin-bottom: 6px; word-break: break-word;
 }
-.ns-editor-t {
+.pc-editor-t {
   width: 100%; min-height: 54px; resize: vertical; box-sizing: border-box;
   font: inherit; font-size: 12px; line-height: 1.6; padding: 6px 7px;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-layer-2);
   border: 1px solid var(--dsw-alias-border-l1); border-radius: 7px;
 }
-.ns-editor-act { display: flex; gap: 6px; margin-top: 6px; }
+.pc-editor-act { display: flex; gap: 6px; margin-top: 6px; }
 
 /* ══ 批注卡 ══════════════════════════════════════════════════════════ */
-.ns-acard-done { opacity: .72; }
-.ns-acard-q {
+.pc-acard-done { opacity: .72; }
+.pc-acard-q {
   font-size: 13px; line-height: 1.6; color: var(--dsw-alias-label-primary);
   margin: 2px 0 4px; word-break: break-word;
 }
-.ns-tag-done { color: var(--dsw-alias-state-business-primary); }
+.pc-tag-done { color: var(--dsw-alias-state-business-primary); }
 
 /* ══ 「按集 / 全部」切换（批注栏标题里的小分段控件）═══════════════════ */
-.ns-seg {
+.pc-seg {
   display: inline-flex; align-items: center;
   border: 1px solid var(--dsw-alias-border-l1); border-radius: 7px;
   overflow: hidden;
 }
-.ns-seg > button {
+.pc-seg > button {
   font: inherit; font-size: 10.5px; line-height: 1;
   padding: 3px 7px; border: none; cursor: pointer;
   color: var(--dsw-alias-label-tertiary); background: transparent;
 }
-.ns-seg > button:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.ns-seg > button.ns-seg-on {
+.pc-seg > button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.pc-seg > button.pc-seg-on {
   color: var(--dsw-alias-state-business-primary);
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* "全部"模式下的分集小标题 */
-.ns-anno-group {
+.pc-anno-group {
   margin: 10px 0 4px; font-size: 10.5px; font-weight: 600;
   color: var(--dsw-alias-label-caption);
 }
@@ -3125,7 +3125,7 @@ body.ns-resizing { user-select: none; }
      rail 态 36×36 圆形只留图标）
    · 同一席位的现成例子：packages/extensions/ui-cordis/.../CordisPanel.module.css 的 .badge
    sidebar.footer.action 的契约是「每个占位者自己负责按钮几何与 hover 样式」。 */
-.ns-foot {
+.pc-foot {
   display: flex; align-items: center; gap: 8px;
   width: calc(100% + 4px); height: 42px; margin: 4px -2px;
   padding: 0 10px 0 8px;
@@ -3135,18 +3135,18 @@ body.ns-resizing { user-select: none; }
   font: inherit; font-size: 14px; line-height: 1.2;
   text-align: left;
 }
-.ns-foot:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.ns-foot-on { color: var(--dsw-alias-state-business-primary); }
-.ns-foot-label { overflow: hidden; white-space: nowrap; }
-.ns-foot svg { flex: none; }
+.pc-foot:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.pc-foot-on { color: var(--dsw-alias-state-business-primary); }
+.pc-foot-label { overflow: hidden; white-space: nowrap; }
+.pc-foot svg { flex: none; }
 /* 侧栏收起（rail）：36×36 圆形、只留图标 —— 同 .trigger.rail */
-.ns-foot-rail {
+.pc-foot-rail {
   width: 36px; height: 36px; margin: 8px 0 10px; padding: 0;
   justify-content: center; gap: 0; border-radius: 50%;
 }
 
 /* ══ 会话标题栏上的「提示词对照」小胶囊 ═══════════════════════════════ */
-.ns-chip {
+.pc-chip {
   display: inline-flex; align-items: center; gap: 4px;
   height: 22px; padding: 0 8px; border-radius: 7px;
   font: inherit; font-size: 11.5px; line-height: 1;
@@ -3154,15 +3154,15 @@ body.ns-resizing { user-select: none; }
   background: transparent; border: none; cursor: pointer;
   white-space: nowrap;
 }
-.ns-chip:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.ns-chip-on {
+.pc-chip:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.pc-chip-on {
   color: var(--dsw-alias-state-business-primary);
   background: var(--dsw-alias-interactive-bg-hover);
 }
-.ns-chip svg { flex: none; }
+.pc-chip svg { flex: none; }
 
 /* ══ 一闪而过的提示 ═══════════════════════════════════════════════════ */
-.ns-toast {
+.pc-toast {
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
   padding: 5px 11px; border-radius: 8px; font-size: 12px;
   color: var(--dsw-alias-label-primary);
@@ -3271,7 +3271,7 @@ body.ns-resizing { user-select: none; }
 		* 侧栏底部、「设置」上面那一排的常驻入口。
 		*
 		* ⚠️ 外观必须和「设置」那一行一致：几何照抄 DSH 的 `SettingsTrigger`（见 styles.ts
-		* 里 `.ns-foot` 的注释）。`sidebar.footer.action` 的契约是"每个占位者自己负责
+		* 里 `.pc-foot` 的注释）。`sidebar.footer.action` 的契约是"每个占位者自己负责
 		* 按钮几何与 hover 样式"，所以这里要自己写全，别指望容器给。
 		*
 		* 席位会把 `wide` 传进来（侧栏展开/收起），收起时只留图标 —— 和设置那一行一样。
@@ -3280,7 +3280,7 @@ body.ns-resizing { user-select: none; }
 			const isOpen = useOpen();
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
 				type: "button",
-				className: `ns-foot${wide ? "" : " ns-foot-rail"}${isOpen ? " ns-foot-on" : ""}`,
+				className: `pc-foot${wide ? "" : " pc-foot-rail"}${isOpen ? " pc-foot-on" : ""}`,
 				title: isOpen ? "收起提示词对照工作台" : "打开提示词对照工作台",
 				"aria-label": "提示词对照",
 				"aria-pressed": isOpen,
@@ -3312,7 +3312,7 @@ body.ns-resizing { user-select: none; }
 						})
 					]
 				}), wide ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-					className: "ns-foot-label",
+					className: "pc-foot-label",
 					children: "提示词对照"
 				}) : null]
 			});
@@ -3327,7 +3327,7 @@ body.ns-resizing { user-select: none; }
 			const isOpen = useOpen();
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
 				type: "button",
-				className: `ns-chip${isOpen ? " ns-chip-on" : ""}`,
+				className: `pc-chip${isOpen ? " pc-chip-on" : ""}`,
 				title: isOpen ? "收起提示词对照工作台" : "打开提示词对照工作台",
 				"aria-pressed": isOpen,
 				onClick: () => setOpen(!isOpen),
@@ -3357,7 +3357,7 @@ body.ns-resizing { user-select: none; }
 			const session = useSessionId();
 			if (!isOpen) return null;
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-				className: "ns-root",
+				className: "pc-root",
 				style: { pointerEvents: "none" },
 				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 					style: {
@@ -3387,10 +3387,10 @@ body.ns-resizing { user-select: none; }
 			}
 			render() {
 				if (this.state.error !== "") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-					className: "ns-root",
+					className: "pc-root",
 					style: { pointerEvents: "none" },
 					children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: "ns-workbench",
+						className: "pc-workbench",
 						style: {
 							left: 24,
 							top: 80,
@@ -3399,13 +3399,13 @@ body.ns-resizing { user-select: none; }
 							pointerEvents: "auto"
 						},
 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: "ns-wb-hd",
+							className: "pc-wb-hd",
 							children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: "ns-t",
+								className: "pc-t",
 								children: "提示词对照"
 							})
 						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: "ns-empty",
+							className: "pc-empty",
 							children: [
 								"工作台出错了（内容没渲染出来）：",
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("br", {}),

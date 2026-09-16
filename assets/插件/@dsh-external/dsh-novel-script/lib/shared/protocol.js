@@ -29,14 +29,23 @@ export const NOVEL_FILE = '小说原文.txt';
 export const SCRIPT_DIR = '剧本';
 export const MANIFEST_DIR = '清单';
 export const ANNOTATION_DIR = '批注';
+/** 人工编辑的历史记录（一次保存一份）。 */
+export const HISTORY_DIR = '历史';
 export const CHANGELOG_FILE = '变更记录.txt';
 /* ── 文件名规则（全部要求阿拉伯数字） ──────────────────────────────────── */
 export const RE_VERSION_DIR = /^v(\d+)$/;
-export const RE_SCRIPT_FILE = /^第(\d+)集剧本\.txt$/;
-export const RE_MANIFEST_FILE = /^第(\d+)集清单\.txt$/;
-export const RE_ANNOTATION_FILE = /^第(\d+)集批注\.txt$/;
-/** 工具的 version 参数。 */
+/**
+ * 工具的 version 参数。
+ *
+ * ⚠️ 只认大版本目录名（`v1`、`v2`）—— 小版本**不是目录**，它是同一个目录里的
+ *    另一组文件（`第1集剧本.v2.1.txt`），所以不在这里出现。
+ */
 export const RE_VERSION_ARG = /^v\d+$/;
+/**
+ * 单集文件名（正文 / 清单 / 批注 / 历史）的解析**不在这里**：
+ * 名字规则（含小版本尾巴）只在 `shared/edit.ts` 的 `parseContentName` 一处，
+ * 免得两份规则各说各话。
+ */
 /** 清单格式版本。 */
 export const MANIFEST_SCHEMA = 1;
 /* ── 批注通道 ──────────────────────────────────────────────────────────── */
@@ -51,6 +60,17 @@ export const MANIFEST_SCHEMA = 1;
  * 跑不了生成器），代价与收益不成比例。设计文档 §17 记了这条偏离。
  */
 export const ANNOTATION_ROUTE = '/api/novel-script/annotations';
+/**
+ * 人工编辑的**保存通道**（浏览器 → 宿主）。
+ *
+ * 与批注通道同一种做法（Connection 的 exact Fetch route，`/api` 载体自带
+ * 校验与浏览器认证）。写盘、冲突检测、行号与"原文对照"的迁移全部在宿主侧
+ * 一次完成，浏览器只把"我改完的全文 + 编辑过程中的快照"送过去。
+ *
+ * ⚠️ 这个通道**只新增文件**（新小版本的三件套 + 一份历史记录），
+ *    老版本一个字节都不动（计划 §1 不变量）。
+ */
+export const EDIT_ROUTE = '/api/novel-script/edit';
 /* ── 路径拼法（一律相对**工作区根**、正斜杠）────────────────────────────
    ⚠️ 不要写成相对清单文件的 `../剧本/…`：程序读文件走的是会话锚定的
    工作区相对路径，多一层相对换算只会多一处出错。 */
@@ -68,9 +88,19 @@ export function asVersionDir(version) {
     return RE_VERSION_DIR.test(version) ? version : `v${version.replace(/^v/i, '')}`;
 }
 export const versionPath = (version) => `${WORKBENCH_DIR}/${asVersionDir(version)}`;
-export const scriptPath = (version, episode) => `${versionPath(version)}/${SCRIPT_DIR}/第${episode}集剧本.txt`;
-export const manifestPath = (version, episode) => `${versionPath(version)}/${MANIFEST_DIR}/第${episode}集清单.txt`;
-export const annotationPath = (version, episode) => `${versionPath(version)}/${ANNOTATION_DIR}/第${episode}集批注.txt`;
+/**
+ * 小版本文件的尾巴：`v2.1` → `.v2.1`；`null` / `undefined`（基线）→ 空串。
+ *
+ * 基线文件与各小版本文件**共处同一个大版本目录**，靠这个尾巴区分。
+ */
+export function minorSuffix(tag) {
+    return tag === undefined || tag === null || tag === '' ? '' : `.${tag}`;
+}
+export const scriptPath = (version, episode, tag) => `${versionPath(version)}/${SCRIPT_DIR}/第${episode}集剧本${minorSuffix(tag)}.txt`;
+export const manifestPath = (version, episode, tag) => `${versionPath(version)}/${MANIFEST_DIR}/第${episode}集清单${minorSuffix(tag)}.txt`;
+export const annotationPath = (version, episode, tag) => `${versionPath(version)}/${ANNOTATION_DIR}/第${episode}集批注${minorSuffix(tag)}.txt`;
+/** 人工编辑的历史记录：`剧本工作台/v2/历史/第1集.v2.1.txt`。 */
+export const historyPath = (version, episode, tag) => `${versionPath(version)}/${HISTORY_DIR}/第${episode}集${minorSuffix(tag)}.txt`;
 export const changelogPath = (version) => `${versionPath(version)}/${CHANGELOG_FILE}`;
 /* ── 小工具 ────────────────────────────────────────────────────────────── */
 /**

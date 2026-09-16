@@ -22,9 +22,11 @@ window.__ModuleLoader__.load({
 		const NOVEL_FILE = "小说原文.txt";
 		const SCRIPT_DIR = "剧本";
 		const MANIFEST_DIR = "清单";
+		const ANNOTATION_DIR = "批注";
+		/** 人工编辑的历史记录（一次保存一份）。 */
+		const HISTORY_DIR = "历史";
+		const CHANGELOG_FILE = "变更记录.txt";
 		const RE_VERSION_DIR = /^v(\d+)$/;
-		const RE_SCRIPT_FILE = /^第(\d+)集剧本\.txt$/;
-		const RE_MANIFEST_FILE = /^第(\d+)集清单\.txt$/;
 		/**
 		* 批注的浏览器 → 宿主通道。
 		*
@@ -36,6 +38,17 @@ window.__ModuleLoader__.load({
 		* 跑不了生成器），代价与收益不成比例。设计文档 §17 记了这条偏离。
 		*/
 		const ANNOTATION_ROUTE = "/api/novel-script/annotations";
+		/**
+		* 人工编辑的**保存通道**（浏览器 → 宿主）。
+		*
+		* 与批注通道同一种做法（Connection 的 exact Fetch route，`/api` 载体自带
+		* 校验与浏览器认证）。写盘、冲突检测、行号与"原文对照"的迁移全部在宿主侧
+		* 一次完成，浏览器只把"我改完的全文 + 编辑过程中的快照"送过去。
+		*
+		* ⚠️ 这个通道**只新增文件**（新小版本的三件套 + 一份历史记录），
+		*    老版本一个字节都不动（计划 §1 不变量）。
+		*/
+		const EDIT_ROUTE = "/api/novel-script/edit";
 		const novelPath = () => `${WORKBENCH_DIR}/${NOVEL_FILE}`;
 		/**
 		* 把"版本"统一成**目录名**。
@@ -49,8 +62,19 @@ window.__ModuleLoader__.load({
 			return RE_VERSION_DIR.test(version) ? version : `v${version.replace(/^v/i, "")}`;
 		}
 		const versionPath = (version) => `${WORKBENCH_DIR}/${asVersionDir(version)}`;
-		const scriptPath = (version, episode) => `${versionPath(version)}/${SCRIPT_DIR}/第${episode}集剧本.txt`;
-		const manifestPath = (version, episode) => `${versionPath(version)}/${MANIFEST_DIR}/第${episode}集清单.txt`;
+		/**
+		* 小版本文件的尾巴：`v2.1` → `.v2.1`；`null` / `undefined`（基线）→ 空串。
+		*
+		* 基线文件与各小版本文件**共处同一个大版本目录**，靠这个尾巴区分。
+		*/
+		function minorSuffix(tag) {
+			return tag === void 0 || tag === null || tag === "" ? "" : `.${tag}`;
+		}
+		const scriptPath = (version, episode, tag) => `${versionPath(version)}/${SCRIPT_DIR}/第${episode}集剧本${minorSuffix(tag)}.txt`;
+		const manifestPath = (version, episode, tag) => `${versionPath(version)}/${MANIFEST_DIR}/第${episode}集清单${minorSuffix(tag)}.txt`;
+		const annotationPath = (version, episode, tag) => `${versionPath(version)}/${ANNOTATION_DIR}/第${episode}集批注${minorSuffix(tag)}.txt`;
+		/** 人工编辑的历史记录：`剧本工作台/v2/历史/第1集.v2.1.txt`。 */
+		const historyPath = (version, episode, tag) => `${versionPath(version)}/${HISTORY_DIR}/第${episode}集${minorSuffix(tag)}.txt`;
 		/**
 		* 版本号排序：`1 < 2 < 10`（按数字比，不是按字符串）。
 		* 参数是**不带 v 的数字串**。
@@ -71,6 +95,83 @@ window.__ModuleLoader__.load({
 		*/
 		function annotationId(seq) {
 			return `a-${String(seq).padStart(4, "0")}`;
+		}
+		//#endregion
+		//#region src/shared/instruction.ts
+		/**
+		* 组装"交给 agent"的那份指令（实施计划 §10）。
+		*
+		* 为什么单独放一层、而且做成纯函数：这份指令是**人与 agent 之间的接口** ——
+		* 路径写错、少了"以最新版本为基线"那一句、漏掉"引文已找不到"的提醒，
+		* agent 就会改错地方，而界面上完全看不出来。所以它有回归用例
+		* （`scripts/verify-edit.mjs` 第 21 节）。
+		*
+		* ⚠️ 一份指令**同时**包含两件事：**人工已经改过的地方**（含历史记录文件路径）
+		*    与**批注**（含"锚点已失效"的提醒）。人工改过之后，批注的引文可能已经对不上
+		*    正文了 —— agent 只看批注会改错地方，只看人工改动又会漏掉批注。
+		*/
+		/** 一处区域的显示名：`第 6 段` / `第 3–7 段`。 */
+		function regionLabel(region) {
+			const to = region.endParagraph ?? region.paragraph;
+			return to > region.paragraph ? `第 ${region.paragraph}–${to} 段` : `第 ${region.paragraph} 段`;
+		}
+		/**
+		* 从原文第一行里取书名。
+		*
+		* ⚠️ 第一行常常不是光秃秃的书名，而是 `## 《某某》第 3 集 · 分镜剧本` 这种大标题。
+		*    直接整行塞进指令会变成"修改《…第 3 集 · 分镜剧本》第 1 集的剧本"，
+		*    所以这里把"第 N 集"之后的部分切掉，太长（>40 字）就干脆不写书名。
+		*/
+		function bookNameOf(bookLine) {
+			const cleaned = bookLine.replace(/^#+\s*/, "").replace(/^[《【[]/, "").replace(/第\s*\d+[\s\S]*$/, "").replace(/[》】\]·|｜\s]+$/, "").trim();
+			return cleaned.length > 0 && cleaned.length <= 40 ? cleaned : "";
+		}
+		/**
+		* 组装指令正文。
+		*
+		* @param input - 见 {@link InstructionInput}。
+		* @returns 可以直接粘进对话的整段文本；没有任何一集时返回空串。
+		*/
+		function buildInstruction(input) {
+			const episodes = [...input.episodes].sort((a, b) => a.episode - b.episode);
+			if (episodes.length === 0) return "";
+			const dir = input.versionDir;
+			const book = bookNameOf(input.bookLine);
+			const where = input.scope === "all" ? `${book === "" ? "这一部" : `《${book}》`}第 ${episodes.map((e) => e.episode).join("、")} 集` : `${book === "" ? "这一集" : `《${book}》第 ${episodes[0]?.episode ?? "?"} 集`}`;
+			const out = [];
+			out.push(`请按下面这份说明修改${where}的剧本。`);
+			out.push("");
+			out.push("⚠️ 每一集都以它自己的\"基线\"文件为准；旧版本只作参考，**不要用旧版本覆盖基线**。");
+			out.push("");
+			for (const item of episodes) {
+				const tag = item.tag;
+				out.push(`【第 ${item.episode} 集】`);
+				out.push("基线（改这一集从它开始）：");
+				out.push(`  正文：${scriptPath(dir, item.episode, tag)}`);
+				out.push(`  清单：${manifestPath(dir, item.episode, tag)}`);
+				out.push(`  批注：${annotationPath(dir, item.episode, tag)}`);
+				out.push(`  小说原文（参考，一个字都不要动）：${input.novelFile}`);
+				if (tag !== null) {
+					out.push(`一、人工已经改过这一集（${dir} → ${tag}）`);
+					out.push(`  完整改动记录：${historyPath(dir, item.episode, tag)}`);
+					out.push("  （里面写了改了哪些行、删了什么、哪几段的原文对照需要复核）");
+					out.push("  提醒：改动后的正文就是基线，不要把它改回去。");
+					out.push("二、批注（需要处理）");
+				} else out.push("一、批注（需要处理）");
+				if (item.annotations.length === 0) out.push("  （这一集没有批注，按上面的人工改动保持一致即可）");
+				item.annotations.forEach((annotation, index) => {
+					const spans = (annotation.regions ?? []).map((region) => `${regionLabel(region)}「${region.quote.replaceAll("\n", " ")}」`).join("；");
+					out.push(`  ${index + 1}. ${spans}——${annotation.problem}`);
+					if (item.staleIds.includes(annotation.id)) out.push("     ⚠️ 这一条的引文在正文里已经找不到（锚点已失效，可能已经被人改掉），请先核对。");
+				});
+				out.push("");
+			}
+			out.push("要求：");
+			out.push("1. 每一集都以它自己的\"基线\"为起点改，不要用旧版本覆盖；");
+			out.push("2. 改完出一个**新的大版本**；新大版本里每一集都取\"该集当前最新的一版\"（基线或最高小版本）作为起点，不要整目录照抄；");
+			out.push("3. 上面列出的批注文件里，已处理的条目改成 done: true、resolvedIn 写新版本号（没采纳的保持 done: false）；");
+			out.push("4. 人工新增的内容，原文里没有对应就按\"新增（无对应）\"登记，不要硬找一段原文来凑，也不要把相邻段落的对应关系抄给它。");
+			return out.join("\n");
 		}
 		//#endregion
 		//#region src/shared/validate.ts
@@ -326,6 +427,10 @@ window.__ModuleLoader__.load({
 		* 设计文档 §17 说明：**读盘、按 id 合并、写盘都在宿主侧一次完成**，
 		* 浏览器只负责把当前列表送过去；同时"文件不存在才当空数组、损坏就停止保存"
 		* 也由宿主判断，这里只把错误原文带回界面。
+		*
+		* ⚠️ 人工编辑模式之后多了一个 `minor`：批注跟着**有效版本**走 ——
+		*    界面上看的是 `第1集剧本.v2.2.txt`，批注就要存在 `第1集批注.v2.2.txt`；
+		*    两边不一致会出现"看到的是 v2.2 的批注、写进 v2.1 的文件"。
 		*/
 		/** 调用批注通道。 */
 		async function callAnnotations(body, signal) {
@@ -356,24 +461,713 @@ window.__ModuleLoader__.load({
 				};
 			}
 		}
+		/** 请求体里的小版本字段：`null` 就不带这个字段（= 基线）。 */
+		function minorField(minor) {
+			return minor === null || minor === void 0 || minor === "" ? {} : { minor };
+		}
 		/** 读一集的批注。 */
-		function loadAnnotations(sessionId, version, episode, signal) {
+		function loadAnnotations(sessionId, version, episode, minor, signal) {
 			return callAnnotations({
 				op: "load",
 				sessionId,
 				version,
-				episode
+				episode,
+				...minorField(minor)
 			}, signal);
 		}
 		/** 存一集的批注（返回宿主合并后的结果）。 */
-		function saveAnnotations(sessionId, version, episode, annotations) {
+		function saveAnnotations(sessionId, version, episode, minor, annotations) {
 			return callAnnotations({
 				op: "save",
 				sessionId,
 				version,
 				episode,
+				...minorField(minor),
 				annotations: [...annotations]
 			});
+		}
+		//#endregion
+		//#region src/shared/edit.ts
+		/**
+		* 名字规则（设计文档 §2.3）。
+		*
+		* ⚠️ 顺序要紧："历史"是唯一一条"集号后面直接跟 .txt"的规则，必须排最后，
+		*    否则 `第1集剧本.txt` 会被它先吃掉。
+		* ⚠️ 正文那一类同时收"剧本"和"提示词"两个词 —— 两个插件刻意同构，
+		*    这里共用一份规则，由 `word` 字段区分；放错词的由调用方报出来。
+		*    用**具名分组**取字段：前三条规则的括号位置不一样，靠下标取太容易错。
+		*/
+		const NAME_PATTERNS = [
+			{
+				kind: "content",
+				re: /^第(?<ep>\d+)集(?<word>剧本|提示词)(?:\.v(?<major>\d+)\.(?<minor>\d+))?\.txt$/
+			},
+			{
+				kind: "manifest",
+				re: /^第(?<ep>\d+)集清单(?:\.v(?<major>\d+)\.(?<minor>\d+))?\.txt$/
+			},
+			{
+				kind: "annotation",
+				re: /^第(?<ep>\d+)集批注(?:\.v(?<major>\d+)\.(?<minor>\d+))?\.txt$/
+			},
+			{
+				kind: "history",
+				re: /^第(?<ep>\d+)集(?:\.v(?<major>\d+)\.(?<minor>\d+))?\.txt$/
+			}
+		];
+		/**
+		* 解析一个文件名。
+		* @param name - 只有文件名（不含目录）。
+		* @returns 不认识时 `undefined`（调用方应当把"文件名不认识"报出来，不猜）。
+		*/
+		function parseContentName(name) {
+			for (const { kind, re } of NAME_PATTERNS) {
+				const m = re.exec(name);
+				if (m === null) continue;
+				const g = m.groups ?? {};
+				const episode = Number.parseInt(g.ep ?? "", 10);
+				if (!Number.isInteger(episode) || episode < 1) return void 0;
+				const word = g.word === "剧本" || g.word === "提示词" ? g.word : void 0;
+				const base = {
+					episode,
+					kind,
+					...word === void 0 ? {} : { word }
+				};
+				if (g.major === void 0 || g.minor === void 0) return base;
+				const minor = Number.parseInt(g.minor, 10);
+				if (!Number.isInteger(minor) || minor < 1) return void 0;
+				return {
+					...base,
+					major: `v${g.major}`,
+					minor,
+					tag: `v${g.major}.${minor}`
+				};
+			}
+		}
+		/** `v2.1` → `v2`；没有点就原样返回。 */
+		function tagMajor(tag) {
+			const dot = tag.indexOf(".");
+			return dot === -1 ? tag : tag.slice(0, dot);
+		}
+		/**
+		* 小版本号里的 `v2` 必须等于它所在的大版本目录名。
+		*
+		* 为什么校验它：`第1集剧本.v3.1.txt` 要是躺在 `v2/` 里，说明文件被挪错过
+		* （或者人手工拷错了），照着用它会把 v3 的内容当成 v2 的人工版本。
+		*/
+		function tagMatchesDir(tag, versionDir) {
+			return tagMajor(tag) === versionDir;
+		}
+		/** 精细比对的开销上限（单元格数）。超过就退化成"整块都算改了"。 */
+		const MAX_DP_CELLS = 262144;
+		/**
+		* 把两份文本**按内容对上号**（这是整个功能的地基）。
+		*
+		* 做法，三步：
+		*   1. 先剥掉**两端完全一样**的部分（真实编辑绝大多数都落在这条路上）；
+		*   2. 中间那段找"最长的公共行序列"（内容相同、先后顺序也一致），连上线；
+		*   3. 连不上的地方就是改动：只有旧行 = 删了，只有新行 = 新增，两边都有 = 改了。
+		*
+		* ⚠️ 为什么不能按行号逐行对比：在第 2 行后面插一行，旧的第 3—10 行会被挤到
+		*    新的第 4—11 行；按行号比就会得出"后面全被改了、末尾还多出一行"的
+		*    错误结论（计划 §9 的硬规则）。
+		*
+		* ⚠️ 内容完全相同的重复行（空行、重复台词）之间**无法分辨**被插进去的是哪一行。
+		*    本实现取"两端的相同行优先配上、改动尽量落在中间"的确定性解；这只影响
+		*    "标记落在哪一行"，**不影响段/块的行范围**。
+		*/
+		function alignLines(oldLines, newLines) {
+			const oldCount = oldLines.length;
+			const newCount = newLines.length;
+			const oldToNew = new Array(oldCount).fill(0);
+			const newToOld = new Array(newCount).fill(0);
+			const matches = [];
+			let head = 0;
+			while (head < oldCount && head < newCount && oldLines[head] === newLines[head]) {
+				oldToNew[head] = head + 1;
+				newToOld[head] = head + 1;
+				matches.push({
+					oldLine: head + 1,
+					newLine: head + 1
+				});
+				head += 1;
+			}
+			let tail = 0;
+			while (oldCount - 1 - tail >= head && newCount - 1 - tail >= head && oldLines[oldCount - 1 - tail] === newLines[newCount - 1 - tail]) {
+				const oldLine = oldCount - tail;
+				const newLine = newCount - tail;
+				oldToNew[oldLine - 1] = newLine;
+				newToOld[newLine - 1] = oldLine;
+				matches.push({
+					oldLine,
+					newLine
+				});
+				tail += 1;
+			}
+			const oStart = head;
+			const nStart = head;
+			const n = oldCount - tail - oStart;
+			const m = newCount - tail - nStart;
+			if (n > 0 && m > 0) {
+				if (n * m <= MAX_DP_CELLS) {
+					const width = m + 1;
+					const dp = new Int32Array((n + 1) * width);
+					for (let i = n - 1; i >= 0; i -= 1) for (let j = m - 1; j >= 0; j -= 1) dp[i * width + j] = oldLines[oStart + i] === newLines[nStart + j] ? (dp[(i + 1) * width + j + 1] ?? 0) + 1 : Math.max(dp[(i + 1) * width + j] ?? 0, dp[i * width + j + 1] ?? 0);
+					let i = 0;
+					let j = 0;
+					while (i < n && j < m) {
+						if (oldLines[oStart + i] === newLines[nStart + j]) {
+							const oldLine = oStart + i + 1;
+							const newLine = nStart + j + 1;
+							oldToNew[oldLine - 1] = newLine;
+							newToOld[newLine - 1] = oldLine;
+							matches.push({
+								oldLine,
+								newLine
+							});
+							i += 1;
+							j += 1;
+							continue;
+						}
+						if ((dp[(i + 1) * width + j] ?? 0) > (dp[i * width + j + 1] ?? 0)) i += 1;
+						else j += 1;
+					}
+					matches.sort((a, b) => a.oldLine - b.oldLine);
+					return {
+						oldToNew,
+						newToOld,
+						matches,
+						degraded: false
+					};
+				}
+				matches.sort((a, b) => a.oldLine - b.oldLine);
+				return {
+					oldToNew,
+					newToOld,
+					matches,
+					degraded: true
+				};
+			}
+			matches.sort((a, b) => a.oldLine - b.oldLine);
+			return {
+				oldToNew,
+				newToOld,
+				matches,
+				degraded: false
+			};
+		}
+		/**
+		* 按空行把正文切成段落（设计文档 §6.1：段间恰好一个空行、段内不许有空行）。
+		*
+		* ⚠️ 连续多个空行只当**一个**分隔符、首尾的空行丢掉 —— 不产生空段落。
+		*    这条很要紧：`computeScriptLines` 假设"下一段起点 = 上一段终点 + 2"，
+		*    切出一个空段落会让行号与正文再也对不上。
+		*/
+		function splitParagraphs(lines) {
+			const out = [];
+			let i = 0;
+			while (i < lines.length) {
+				while (i < lines.length && isBlankLine(lines[i] ?? "")) i += 1;
+				if (i >= lines.length) break;
+				const start = i;
+				while (i < lines.length && !isBlankLine(lines[i] ?? "")) i += 1;
+				out.push({
+					start: start + 1,
+					end: i
+				});
+			}
+			return out;
+		}
+		/** 内部：造一个段落对象。 */
+		function makeParagraph(index, span, text, origin, fromIndex, sourceRanges, needsReview, shared) {
+			return {
+				index,
+				span,
+				scriptLines: [span.start, span.end],
+				text,
+				origin,
+				fromIndex,
+				sourceRanges: origin === "added" ? null : sourceRanges,
+				needsReview,
+				shared
+			};
+		}
+		/** 旧段落原文（清单坏了 / 越界时给空串）。 */
+		function textOfOldParagraph(oldLines, paragraph) {
+			if (paragraph === void 0) return "";
+			const [start, end] = paragraph.scriptLines;
+			if (start < 1 || end < start) return "";
+			return oldLines.slice(start - 1, end).join("\n");
+		}
+		/**
+		* 两段文字"像不像"：按**字符**的最长公共子序列算个 0—1 的比值。
+		*
+		* 用途：人工改稿通常是"在一句话上改几个字"，两段文字会长得很像；而"删掉一整段"
+		* 留下的空缺跟隔壁段八竿子打不着。靠这个比值，程序能分清"这一段是改出来的"
+		* 还是"这一段是新写的"，比"数目对不对得上"可靠得多（见 `deriveParagraphs` 的说明）。
+		*
+		* ⚠️ 很长的文字（乘积超过 4096）退化成"共同前缀 + 共同后缀"的粗略值 ——
+		*    剧本段落不会那么长，真遇到了也不值得为它多花时间。
+		*/
+		function textSimilarity(a, b) {
+			const x = normalizeNewlines(a);
+			const y = normalizeNewlines(b);
+			if (x === "" || y === "") return 0;
+			if (x === y) return 1;
+			const n = x.length;
+			const m = y.length;
+			if (n * m > 4096) {
+				let head = 0;
+				while (head < n && head < m && x[head] === y[head]) head += 1;
+				let tail = 0;
+				while (tail < n - head && tail < m - head && x[n - 1 - tail] === y[m - 1 - tail]) tail += 1;
+				return 2 * (head + tail) / (n + m);
+			}
+			const width = m + 1;
+			const dp = new Int32Array((n + 1) * width);
+			for (let i = n - 1; i >= 0; i -= 1) for (let j = m - 1; j >= 0; j -= 1) dp[i * width + j] = x[i] === y[j] ? (dp[(i + 1) * width + j + 1] ?? 0) + 1 : Math.max(dp[(i + 1) * width + j] ?? 0, dp[i * width + j + 1] ?? 0);
+			return 2 * (dp[0] ?? 0) / (n + m);
+		}
+		/**
+		* 把旧段落"迁移"到新正文上。
+		*
+		* 判断顺序（计划 §9）：
+		*   ① 原样没动 → `same`，对应关系原样沿用；
+		*   ② 是原来某一段改出来的 → `edited`，沿用 + 待复核；
+		*   ③ 都不是 → `added`，对应关系记空（**不搜索、不继承邻居**）。
+		*
+		* ⚠️ "是原来某一段改出来的"怎么判：先看这一段的文字有没有对回某一段旧段落
+		*    （对齐结果里能连线）；整段被重写、连不上线时，再看它**夹在哪两段之间** ——
+		*    如果它落在"上一段对应旧 X、下一段对应旧 Y"的中间，而 X 与 Y 之间恰好有
+		*    同样数目的旧段落没人认领，那就认作"那几段被重写了"（沿用 + 待复核）。
+		*    数目对不上就按新增登记（宁可记新增，不凑对应关系）。
+		*/
+		function deriveParagraphs(oldLines, newLines, oldParagraphs, alignment = alignLines(oldLines, newLines)) {
+			const issues = [];
+			const spans = splitParagraphs(newLines);
+			const texts = spans.map((span) => newLines.slice(span.start - 1, span.end).join("\n"));
+			const oldLineToParagraph = /* @__PURE__ */ new Map();
+			oldParagraphs.forEach((p, index) => {
+				const [start, end] = p.scriptLines;
+				if (start === 0 && end === 0) return;
+				for (let line = start; line <= end; line += 1) oldLineToParagraph.set(line, index + 1);
+			});
+			const refs = spans.map((span) => {
+				const set = /* @__PURE__ */ new Set();
+				for (let line = span.start; line <= span.end; line += 1) {
+					const oldLine = alignment.newToOld[line - 1] ?? 0;
+					if (oldLine === 0) continue;
+					const paragraph = oldLineToParagraph.get(oldLine);
+					if (paragraph !== void 0) set.add(paragraph);
+				}
+				return [...set].sort((a, b) => a - b);
+			});
+			const referenced = /* @__PURE__ */ new Set();
+			for (const list of refs) for (const n of list) referenced.add(n);
+			const orphans = oldParagraphs.map((_, index) => index + 1).filter((n) => !referenced.has(n));
+			const useCount = /* @__PURE__ */ new Map();
+			for (const list of refs) for (const n of list) useCount.set(n, (useCount.get(n) ?? 0) + 1);
+			const prevRef = [];
+			const nextRef = [];
+			{
+				let last = 0;
+				for (let i = 0; i < refs.length; i += 1) {
+					prevRef.push(last);
+					const list = refs[i];
+					if (list !== void 0 && list.length > 0) last = list[list.length - 1] ?? last;
+				}
+				let next = oldParagraphs.length + 1;
+				for (let i = refs.length - 1; i >= 0; i -= 1) {
+					nextRef[i] = next;
+					const list = refs[i];
+					if (list !== void 0 && list.length > 0) next = list[0] ?? next;
+				}
+			}
+			if (alignment.degraded) {
+				issues.push("这一集改动很大，程序没能逐行精细比对；下面的对应关系是按位置推的，请复核");
+				return {
+					paragraphs: spans.map((span, index) => {
+						const text = texts[index] ?? "";
+						const old = oldParagraphs[index];
+						const same = old !== void 0 && textOfOldParagraph(oldLines, old) === text;
+						const origin = same ? "same" : old === void 0 ? "added" : "edited";
+						return makeParagraph(index + 1, span, text, origin, origin === "added" ? null : index + 1, old?.sourceRanges ?? null, !same, false);
+					}),
+					deleted: orphans,
+					degraded: true,
+					issues
+				};
+			}
+			const out = spans.map((span, index) => {
+				const text = texts[index] ?? "";
+				const list = refs[index] ?? [];
+				if (list.length === 1) {
+					const from = list[0] ?? 1;
+					const shared = (useCount.get(from) ?? 0) > 1;
+					const same = textOfOldParagraph(oldLines, oldParagraphs[from - 1]) === text && !shared;
+					return makeParagraph(index + 1, span, text, same ? "same" : "edited", from, oldParagraphs[from - 1]?.sourceRanges ?? null, !same || shared, shared);
+				}
+				if (list.length > 1) {
+					const from = list[0] ?? 1;
+					return makeParagraph(index + 1, span, text, "edited", from, oldParagraphs[from - 1]?.sourceRanges ?? null, true, true);
+				}
+				return makeParagraph(index + 1, span, text, "added", null, null, false, false);
+			});
+			const consumed = /* @__PURE__ */ new Set();
+			let cursor = 0;
+			while (cursor < out.length) {
+				if (out[cursor]?.origin !== "added") {
+					cursor += 1;
+					continue;
+				}
+				let end = cursor;
+				while (end + 1 < out.length && out[end + 1]?.origin === "added") end += 1;
+				const runLength = end - cursor + 1;
+				const from = prevRef[cursor] ?? 0;
+				const to = nextRef[cursor] ?? oldParagraphs.length + 1;
+				const candidates = orphans.filter((n) => n > from && n < to && !consumed.has(n));
+				const pairs = /* @__PURE__ */ new Map();
+				for (let offset = 0; offset < runLength; offset += 1) {
+					const target = out[cursor + offset];
+					if (target === void 0) continue;
+					let best = null;
+					for (const candidate of candidates) {
+						if ([...pairs.values()].includes(candidate)) continue;
+						const score = textSimilarity(target.text, textOfOldParagraph(oldLines, oldParagraphs[candidate - 1]));
+						if (score < .5) continue;
+						if (best === null || score > best.score) best = {
+							index: candidate,
+							score
+						};
+					}
+					if (best !== null) pairs.set(offset, best.index);
+				}
+				const leftoverRun = [...Array(runLength).keys()].filter((offset) => !pairs.has(offset));
+				const leftoverCandidates = candidates.filter((n) => ![...pairs.values()].includes(n));
+				if (leftoverRun.length > 0 && leftoverRun.length === leftoverCandidates.length) leftoverRun.forEach((offset, index) => {
+					const candidate = leftoverCandidates[index];
+					if (candidate !== void 0) pairs.set(offset, candidate);
+				});
+				for (const [offset, fromIndex] of pairs) {
+					const target = out[cursor + offset];
+					if (target === void 0) continue;
+					consumed.add(fromIndex);
+					out[cursor + offset] = {
+						...target,
+						origin: "edited",
+						fromIndex,
+						sourceRanges: oldParagraphs[fromIndex - 1]?.sourceRanges ?? null,
+						needsReview: true
+					};
+				}
+				if ([...Array(runLength).keys()].filter((offset) => !pairs.has(offset)).length > 0 && candidates.length > 0) {
+					const where = runLength === 1 ? `第 ${cursor + 1} 段` : `第 ${cursor + 1}—${end + 1} 段`;
+					issues.push(`${where}改动太大，说不清对应原来哪一段，已按"新增"登记`);
+				}
+				cursor = end + 1;
+			}
+			return {
+				paragraphs: out,
+				deleted: orphans.filter((n) => !consumed.has(n)),
+				degraded: false,
+				issues
+			};
+		}
+		/**
+		* 引文还在不在正文里。
+		*
+		* ⚠️ 先用原样子串比（设计文档 §7.3 的口径）；失败再退一步，按"每行去首尾
+		*    空白、连续空白压成一个空格"比一次 —— 人工编辑很容易在行尾多一个空格，
+		*    那种情况不该判成"锚点失效"。两次都不中才算失效。
+		*/
+		function containsQuote(text, quote) {
+			if (quote === "") return false;
+			if (normalizeNewlines(text).includes(quote)) return true;
+			const squash = (value) => normalizeNewlines(value).split("\n").map((line) => line.trim()).join("\n").replace(/[ \t]+/g, " ");
+			return squash(text).includes(squash(quote));
+		}
+		function sameLines(a, b) {
+			return a.length === b.length && a.every((line, i) => line === b[i]);
+		}
+		/** 一段文字 → 每一行（口径与 `validate.ts` 的 `splitLines` 一致）。 */
+		function linesOf(text) {
+			return splitLines(text);
+		}
+		/** 开一个状态。 */
+		function initialSnapshotState(baseText) {
+			return {
+				text: baseText,
+				baseText,
+				frames: [],
+				composing: false,
+				pending: false,
+				lastInputMs: 0,
+				settleAtMs: null
+			};
+		}
+		/** 两张帧内容一样（按行比，忽略行尾的换行差异）。 */
+		function sameFrameText(a, b) {
+			return sameLines(linesOf(a), linesOf(b));
+		}
+		/**
+		* 拍一张帧（内容与上一张或基线一样就不拍）。
+		*
+		* ⚠️ 为什么"一样就不拍"：拼音敲到一半按 Esc 取消、候选窗里翻页，都会让文本框
+		*    的值来回变；不比较的话历史里会塞满没意义的帧。
+		*/
+		function takeFrame(state, at, nowMs) {
+			const last = state.frames[state.frames.length - 1]?.text ?? state.baseText;
+			if (sameFrameText(state.text, last)) return {
+				...state,
+				pending: false,
+				settleAtMs: null,
+				lastInputMs: nowMs
+			};
+			return {
+				...state,
+				frames: [...state.frames, {
+					text: state.text,
+					...at === "" ? {} : { at }
+				}],
+				pending: false,
+				settleAtMs: null,
+				lastInputMs: nowMs
+			};
+		}
+		/**
+		* 快照状态机（计划 §8.1）。
+		*
+		* 规则：
+		*   · **组合中（在拼拼音）不计时、绝不拍** —— 这时候文本框里是拼音/候选串，
+		*     拍下来就把拼音写进历史了；
+		*   · 组合结束（上屏）后隔 `SNAPSHOT_SETTLE_MS` 拍一张，拿到的是汉字；
+		*   · 非组合输入按"停手 `SNAPSHOT_IDLE_MS`"拍一张；
+		*   · 离开输入框 / 保存前强制补一张；
+		*   · 内容与上一张一样就不拍。
+		*
+		* ⚠️ 调用方还要保证：提交给宿主之前若仍在组合中，**丢掉最后一张**
+		*    （见 `dropLastFrameIfComposing`），宿主侧也会再兜一次。
+		*/
+		function snapshotReducer(state, event) {
+			switch (event.kind) {
+				case "input": {
+					const next = {
+						...state,
+						text: event.text,
+						pending: true
+					};
+					if (state.composing) return {
+						...next,
+						settleAtMs: null
+					};
+					return {
+						...next,
+						lastInputMs: event.nowMs,
+						settleAtMs: null
+					};
+				}
+				case "compositionStart": return {
+					...state,
+					text: event.text,
+					composing: true,
+					pending: true,
+					settleAtMs: null
+				};
+				case "compositionEnd": {
+					const next = {
+						...state,
+						text: event.text,
+						composing: false,
+						pending: true
+					};
+					if (sameFrameText(next.text, next.frames[next.frames.length - 1]?.text ?? next.baseText)) return {
+						...next,
+						pending: false,
+						settleAtMs: null,
+						lastInputMs: event.nowMs
+					};
+					return {
+						...next,
+						settleAtMs: event.nowMs + 250
+					};
+				}
+				case "blur": return event.text === state.text && state.composing ? {
+					...state,
+					composing: false
+				} : takeFrame({
+					...state,
+					text: event.text,
+					composing: false
+				}, event.at, event.nowMs);
+				case "flush": return takeFrame({
+					...state,
+					text: event.text,
+					composing: false
+				}, event.at, event.nowMs);
+				case "tick":
+					if (state.composing || !state.pending) return state;
+					if (state.settleAtMs !== null) return event.nowMs >= state.settleAtMs ? takeFrame(state, event.at, event.nowMs) : state;
+					return event.nowMs - state.lastInputMs >= 3e3 ? takeFrame(state, event.at, event.nowMs) : state;
+				default: return state;
+			}
+		}
+		/**
+		* 提交给宿主的帧。
+		*
+		* ⚠️ 为什么不需要"丢掉最后一张"：组合期间**从来没有拍过帧**，所以帧里不会有
+		*    拼音。真正要防的是"提交时文本框里还是拼音" —— 那由两件事兜住：
+		*    ① 点「保存」会让文本框失焦，浏览器会**先把组合提交掉**（`compositionend`
+		*    先到），所以那一刻 `composing` 已经是 false；
+		*    ② 万一事件顺序不对，`composing` 会是 true，界面据此提示一句、
+		*    宿主侧也会把最后一帧与最终正文不一致的情况忽略掉。
+		*/
+		function snapshotsForSubmit(state) {
+			return {
+				frames: [...state.frames],
+				composing: state.composing
+			};
+		}
+		//#endregion
+		//#region src/shared/versions.ts
+		/**
+		* "哪堆文件属于哪一集、哪一版" —— **纯函数**，输入只是目录里的文件名清单。
+		*
+		* 为什么单独放一层：这段判断以前长在浏览器的扫描函数里（跟着 `workspaceFiles`
+		* 一起），错不错都没法测。把它拎出来之后，`scripts/verify-edit.mjs` 可以直接
+		* 喂一堆文件名断言结果，P1 的规则就有了回归网。
+		*
+		* 规则（设计文档 §2、计划 §3）：
+		*   · 基线文件（不带 `.vN.M`）与同集的小版本文件共处一个大版本目录；
+		*   · 小版本号是**每一集各算各的**；
+		*   · **有效版本** = 这一集"正文 + 清单都齐"的最高小版本；都没有就是基线；
+		*   · 批注文件不参与"齐不齐"的判断（它是写了第一条批注才有的），
+		*     但要跟着有效版本走 —— 谁有效就读谁那一份。
+		*/
+		const emptyTriple = () => ({
+			content: null,
+			manifest: null,
+			annotation: null
+		});
+		const FIELD_LABEL = {
+			content: "正文",
+			manifest: "清单",
+			annotation: "批注"
+		};
+		/**
+		* 把一个版本目录里的文件名清单整理成"每集有哪些版本、哪一版有效"。
+		*
+		* @param input - 见 {@link VersionGroupInput}。
+		* @returns 版本结构 + 这个版本自己的问题清单（给界面原样显示，不当错误处理）。
+		*/
+		function groupVersion(input) {
+			const issues = [];
+			const version = input.dir.startsWith("v") ? input.dir.slice(1) : input.dir;
+			const episodes = /* @__PURE__ */ new Map();
+			const bucket = (episode) => {
+				const found = episodes.get(episode);
+				if (found !== void 0) return found;
+				const created = {
+					baseline: emptyTriple(),
+					minors: /* @__PURE__ */ new Map()
+				};
+				episodes.set(episode, created);
+				return created;
+			};
+			const put = (field, name, parsed) => {
+				if (parsed === void 0) return;
+				const target = bucket(parsed.episode);
+				let triple;
+				if (parsed.tag === void 0 || parsed.minor === void 0) triple = target.baseline;
+				else {
+					const existing = target.minors.get(parsed.minor);
+					if (existing !== void 0) triple = existing.files;
+					else {
+						const created = {
+							tag: parsed.tag,
+							minor: parsed.minor,
+							files: emptyTriple()
+						};
+						target.minors.set(parsed.minor, created);
+						triple = created.files;
+					}
+				}
+				const already = triple[field];
+				if (already !== null) {
+					issues.push(`第 ${parsed.episode} 集：${FIELD_LABEL[field]}有重复文件（${already} 与 ${name}）`);
+					return;
+				}
+				triple[field] = name;
+			};
+			const scanDir = (dirName, kind) => {
+				for (const name of input.files[dirName] ?? []) {
+					const parsed = parseContentName(name);
+					if (parsed === void 0 || parsed.kind !== kind) {
+						issues.push(`${dirName}/${name}：文件名不认识`);
+						continue;
+					}
+					if (kind === "content" && parsed.word !== input.word) {
+						issues.push(`${dirName}/${name}："${parsed.word ?? "?"}"不是这个工作台的正文（这里应当是"${input.word}"）`);
+						continue;
+					}
+					if (parsed.tag !== void 0 && !tagMatchesDir(parsed.tag, input.dir)) {
+						issues.push(`${dirName}/${name}：小版本号与目录 ${input.dir} 对不上`);
+						continue;
+					}
+					put(kind === "content" ? "content" : kind === "manifest" ? "manifest" : "annotation", name, parsed);
+				}
+			};
+			scanDir(input.word, "content");
+			scanDir("清单", "manifest");
+			scanDir("批注", "annotation");
+			for (const name of input.files["历史"] ?? []) {
+				const parsed = parseContentName(name);
+				if (parsed === void 0 || parsed.kind !== "history") issues.push(`历史/${name}：文件名不认识`);
+			}
+			const out = [];
+			for (const [episode, entry] of [...episodes.entries()].sort((a, b) => a[0] - b[0])) {
+				const epIssues = [];
+				if (entry.baseline.content === null) epIssues.push(`第 ${episode} 集：缺${input.word}文件`);
+				if (entry.baseline.manifest === null) epIssues.push(`第 ${episode} 集：缺清单文件`);
+				const minors = [...entry.minors.values()].sort((a, b) => a.minor - b.minor);
+				let effective = {
+					tag: null,
+					files: entry.baseline
+				};
+				for (const minor of minors) {
+					const hasContent = minor.files.content !== null;
+					const hasManifest = minor.files.manifest !== null;
+					if (!hasContent && !hasManifest) {
+						epIssues.push(`第 ${episode} 集 ${minor.tag}：只有批注文件，没有对应的正文与清单`);
+						continue;
+					}
+					if (!hasContent || !hasManifest) {
+						epIssues.push(`第 ${episode} 集 ${minor.tag}：这一版不完整（缺${hasContent ? "清单" : input.word}）`);
+						continue;
+					}
+					effective = {
+						tag: minor.tag,
+						files: minor.files
+					};
+				}
+				out.push({
+					episode,
+					baseline: entry.baseline,
+					minors,
+					effective,
+					issues: epIssues
+				});
+			}
+			return {
+				version,
+				dir: input.dir,
+				episodes: out,
+				hasChangelog: input.hasChangelog,
+				issues
+			};
+		}
+		/** 界面上给这一集打的版本标签：`v2.3（人工）` 或 `v2`。 */
+		function effectiveLabel(entry, version) {
+			return entry.effective.tag === null ? `v${version}` : `${entry.effective.tag}（人工）`;
 		}
 		//#endregion
 		//#region src/client/workspace.ts
@@ -385,6 +1179,11 @@ window.__ModuleLoader__.load({
 		*
 		* 一条实测出来的契约：`workspaceFiles.list/read` 的**第一个参数是会话 id**，
 		* 不是工作区 id —— 会话锚定了工作区根，所以"读哪个工作区"由当前会话决定。
+		*
+		* ⚠️ 从人工编辑模式起，一个大版本目录里除了基线文件还会有**小版本文件**
+		*    （`第1集剧本.v2.1.txt`）。"哪堆文件属于哪一集、哪一版有效"这段判断
+		*    全部在 `shared/versions.ts` 的 `groupVersion` 里（纯函数、有回归用例），
+		*    这里只负责把目录列出来喂给它。
 		*/
 		/** 单次读取最多翻多少页（一页默认 5000 行）。 */
 		const MAX_READ_PAGES = 40;
@@ -461,27 +1260,18 @@ window.__ModuleLoader__.load({
 			issues: [],
 			error: "还没有开始扫描"
 		};
-		/** 把文件名里的集号提出来。 */
-		function episodesFrom(names, re) {
-			const found = /* @__PURE__ */ new Map();
-			const unknown = [];
-			for (const name of names) {
-				const m = re.exec(name);
-				if (m?.[1] === void 0) {
-					unknown.push(name);
-					continue;
-				}
-				found.set(Number.parseInt(m[1], 10), name);
-			}
-			return {
-				found,
-				unknown
-			};
-		}
+		/** 版本目录里我们关心的四个子目录 —— 顺序固定，方便日志与用例。 */
+		const SUB_DIRS = [
+			SCRIPT_DIR,
+			MANIFEST_DIR,
+			ANNOTATION_DIR,
+			HISTORY_DIR
+		];
 		/**
-		* 扫 `剧本工作台/`：有哪些版本、每个版本有哪些集、缺什么。
+		* 扫 `剧本工作台/`：有哪些版本、每个版本有哪些集、每集哪一版有效。
 		*
-		* 只做机械检查（文件在不在、集号有没有重号），**不判断剧情内容**。
+		* 只做机械检查（文件在不在、名字认不认识），**不判断剧情内容**；
+		* "哪一版有效"由 `groupVersion` 判定（正文 + 清单都齐的最高小版本）。
 		*/
 		async function scanWorkbench(files, sessionId, signal) {
 			const root = await listDir(files, sessionId, ".", signal);
@@ -515,34 +1305,25 @@ window.__ModuleLoader__.load({
 				error: ""
 			};
 			const versions = [];
-			for (const { dir, version } of versionDirs) {
-				const scripts = await listDir(files, sessionId, `${WORKBENCH_DIR}/${dir}/${SCRIPT_DIR}`, signal);
-				const manifests = await listDir(files, sessionId, `${WORKBENCH_DIR}/${dir}/${MANIFEST_DIR}`, signal);
-				const scriptFiles = episodesFrom(scripts?.files ?? [], RE_SCRIPT_FILE);
-				const manifestFiles = episodesFrom(manifests?.files ?? [], RE_MANIFEST_FILE);
-				for (const name of scriptFiles.unknown) issues.push(`${dir}/${SCRIPT_DIR}/${name}：文件名不认识（要写成「第1集剧本.txt」这样）`);
-				for (const name of manifestFiles.unknown) issues.push(`${dir}/${MANIFEST_DIR}/${name}：文件名不认识（要写成「第1集清单.txt」这样）`);
-				const episodes = [];
-				const all = [...new Set([...scriptFiles.found.keys(), ...manifestFiles.found.keys()])].sort((a, b) => a - b);
-				for (const episode of all) {
-					const hasScript = scriptFiles.found.has(episode);
-					const hasManifest = manifestFiles.found.has(episode);
-					if (!hasScript) issues.push(`${dir} 第 ${episode} 集：缺剧本文件`);
-					if (!hasManifest) issues.push(`${dir} 第 ${episode} 集：缺清单文件`);
-					episodes.push({
-						episode,
-						hasScript,
-						hasManifest,
-						hasAnnotations: false
-					});
+			for (const { dir } of versionDirs) {
+				const inside = await listDir(files, sessionId, `${WORKBENCH_DIR}/${dir}`, signal);
+				const listed = {};
+				for (const sub of SUB_DIRS) {
+					if (inside === void 0 || !inside.dirs.includes(sub)) {
+						listed[sub] = [];
+						continue;
+					}
+					listed[sub] = (await listDir(files, sessionId, `剧本工作台/${dir}/${sub}`, signal))?.files ?? [];
 				}
-				const version_ = await listDir(files, sessionId, `${WORKBENCH_DIR}/${dir}`, signal);
-				versions.push({
-					version,
+				const grouped = groupVersion({
 					dir,
-					episodes,
-					hasChangelog: version_?.files.includes("变更记录.txt") === true
+					word: SCRIPT_DIR,
+					files: listed,
+					hasChangelog: inside?.files.includes(CHANGELOG_FILE) === true
 				});
+				for (const issue of grouped.issues) issues.push(`${dir} ${issue}`);
+				for (const entry of grouped.episodes) for (const issue of entry.issues) issues.push(`${dir} ${issue}`);
+				versions.push(grouped);
 			}
 			return {
 				phase: "ready",
@@ -674,8 +1455,16 @@ window.__ModuleLoader__.load({
 			novelRange: null,
 			totalLines: 0
 		};
-		function useEpisode(files, sessionId, version, episode) {
+		/**
+		* 读一集的清单 + 剧本。
+		*
+		* @param tag - 小版本号（如 `v2.1`）；`null` = 基线。
+		*   **必须传这一集的有效版本** —— 看哪一份正文，就要配哪一份清单，
+		*   两者的行号是一套；传错就会出现"清单与剧本对不上"的假报警。
+		*/
+		function useEpisode(files, sessionId, version, episode, tag) {
 			const [state, setState] = (0, react.useState)(EMPTY_EPISODE);
+			const [nonce, setNonce] = (0, react.useState)(0);
 			(0, react.useEffect)(() => {
 				if (files === void 0 || sessionId === void 0 || sessionId === "" || version === void 0 || episode === void 0) {
 					setState(EMPTY_EPISODE);
@@ -688,8 +1477,8 @@ window.__ModuleLoader__.load({
 					phase: "loading"
 				});
 				(async () => {
-					const manifestRel = manifestPath(version, episode);
-					const scriptRel = scriptPath(version, episode);
+					const manifestRel = manifestPath(version, episode, tag);
+					const scriptRel = scriptPath(version, episode, tag);
 					const manifestText = await tryReadText(files, sessionId, manifestRel, ac.signal);
 					if (manifestText === void 0) {
 						if (alive) setState({
@@ -768,11 +1557,17 @@ window.__ModuleLoader__.load({
 				files,
 				sessionId,
 				version,
-				episode
+				episode,
+				tag,
+				nonce
 			]);
-			return state;
+			const reload = (0, react.useCallback)(() => setNonce((n) => n + 1), []);
+			return {
+				...state,
+				reload
+			};
 		}
-		function useAnnotations(sessionId, version, episode) {
+		function useAnnotations(sessionId, version, episode, tag) {
 			const [phase, setPhase] = (0, react.useState)("idle");
 			const [error, setError] = (0, react.useState)("");
 			const [annotations, setAnnotations] = (0, react.useState)([]);
@@ -787,7 +1582,7 @@ window.__ModuleLoader__.load({
 				let alive = true;
 				setPhase("loading");
 				setError("");
-				loadAnnotations(sessionId, version, episode).then((result) => {
+				loadAnnotations(sessionId, version, episode, tag).then((result) => {
 					if (!alive) return;
 					if (!result.ok) {
 						setAnnotations([]);
@@ -809,6 +1604,7 @@ window.__ModuleLoader__.load({
 				sessionId,
 				version,
 				episode,
+				tag,
 				nonce
 			]);
 			const save = (0, react.useCallback)(async (next) => {
@@ -818,7 +1614,7 @@ window.__ModuleLoader__.load({
 				}
 				setSaving(true);
 				try {
-					const result = await saveAnnotations(sessionId, version, episode, next);
+					const result = await saveAnnotations(sessionId, version, episode, tag, next);
 					if (!result.ok) {
 						setError(result.error);
 						return false;
@@ -836,7 +1632,8 @@ window.__ModuleLoader__.load({
 			}, [
 				sessionId,
 				version,
-				episode
+				episode,
+				tag
 			]);
 			return {
 				phase,
@@ -846,6 +1643,68 @@ window.__ModuleLoader__.load({
 				reload: (0, react.useCallback)(() => setNonce((n) => n + 1), []),
 				save
 			};
+		}
+		//#endregion
+		//#region src/client/edit.ts
+		/**
+		* 保存通道的浏览器端：把"改完的全文 + 编辑过程中的快照"交给宿主。
+		*
+		* 通道是官方 `/api` 载体上的一个 exact Fetch route（路径见 `shared/protocol.ts`
+		* 的 `EDIT_ROUTE`）。**读盘比对、按内容对齐、写新小版本的三件套、写历史**
+		* 全部在宿主侧一次完成，这里只把结果带回界面。
+		*
+		* ⚠️ 这条通道**只新增文件**，永远不会覆盖老版本；失败时宿主会明确说
+		*    "已经写了哪几个文件"，界面照原话显示，不假装成功。
+		*/
+		/** 提交一次人工编辑。 */
+		async function submitEdit(body, signal) {
+			let response;
+			try {
+				response = await fetch(EDIT_ROUTE, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify(body),
+					...signal === void 0 ? {} : { signal }
+				});
+			} catch (error) {
+				return {
+					ok: false,
+					error: `连不上保存通道（${EDIT_ROUTE}）：${error instanceof Error ? error.message : String(error)}`
+				};
+			}
+			if (!response.ok) return {
+				ok: false,
+				error: `保存通道返回 HTTP ${response.status}`
+			};
+			try {
+				return await response.json();
+			} catch {
+				return {
+					ok: false,
+					error: "保存通道返回的不是合法 JSON"
+				};
+			}
+		}
+		//#endregion
+		//#region src/client/unsaved.ts
+		/**
+		* "还有没保存的人工改动"这个状态，需要在**两个模块之间**传递：
+		* 工作台（浮层里的组件）知道有没有改动，而**关掉浮层的按钮在另一个模块**
+		* （`client/index.tsx` 的侧栏/标题栏入口）。
+		*
+		* 所以放一个模块级的小开关，而不是把状态提上去：浮层关掉时组件会卸载，
+		* 用模块级变量最直接，也和本插件已有的 `open` 小 store 是一个路数。
+		*
+		* ⚠️ 只用来**拦一下确认**，不存草稿内容 —— 草稿归工作台自己管。
+		*/
+		let dirty = false;
+		/** 工作台告诉外面："现在有没有没保存的改动"。 */
+		function setUnsaved(next) {
+			dirty = next;
+		}
+		/** 外面问："现在能安全地关掉工作台吗？" */
+		function hasUnsaved() {
+			return dirty;
 		}
 		//#endregion
 		//#region src/client/geometry.ts
@@ -1092,17 +1951,22 @@ window.__ModuleLoader__.load({
 		*   · 点批注卡上的「定位」→ 跳到那一段；
 		*   · 清单与剧本对不上 / 文件缺失 → 顶部醒目地说出来，不猜。
 		*/
+		/** 毫秒 → `14:20:44`（历史/提示里给人看的时间）。 */
+		function clockOf(ms) {
+			return new Date(ms).toTimeString().slice(0, 8);
+		}
+		/** 光标偏移 → 第几行（1 基）。 */
+		function lineOfOffset(text, offset) {
+			const clamped = Math.max(0, Math.min(offset, text.length));
+			return text.slice(0, clamped).split("\n").length;
+		}
 		/** 列宽约束：两侧最小 180，中间至少留 260。 */
 		const MIN_SIDE = 180;
 		const MIN_MID = 260;
 		/** 浮动批注框的尺寸（用来把它夹进视口，免得贴边被切）。 */
 		const POPUP_W = 320;
 		const POPUP_H = 210;
-		/** 一处区域的显示名：`第 6 段` / `第 3–7 段`。 */
-		function regionLabel(region) {
-			const to = region.endParagraph ?? region.paragraph;
-			return to > region.paragraph ? `第 ${region.paragraph}–${to} 段` : `第 ${region.paragraph} 段`;
-		}
+		/** 一处区域的显示名：`第 6 段` / `第 3–7 段`（实现挪到 `shared/instruction.ts`，那里有用例）。 */
 		/** 把几处区域摊平成段落号（去重、升序）—— 高亮和跳转都用它。 */
 		function paragraphsOfRegions(regions) {
 			const out = /* @__PURE__ */ new Set();
@@ -1115,15 +1979,32 @@ window.__ModuleLoader__.load({
 		/**
 		* 未登记时给主人复制的那句话。
 		*
-		* 写得具体是因为 agent 需要知道**完整流程**：建目录、拷原文（字节复制）、
-		* 一集一集调工具、先跑第 1 集。
+		* 写得具体是因为 agent 需要知道**完整流程**：建目录、准备原文、一集一集调工具、
+		* 先跑第 1 集。
+		*
+		* ⚠️ 第 2 步分两种情形（2026-09-15 加的）：原文是**整份拷**还是**按这一季的剧本
+		*    节选一段**。为什么允许节选：原文动辄几十万字，整份放进工作台会让原文栏
+		*    要渲染几万个 DOM 节点（还有工具每次都要把整份读一遍数行数），卡得没法用。
+		*    但节选有一个硬前提：**范围要覆盖这一季的全部集数**，否则后面几集登记时
+		*    原文里没有对应行，会静默变成"新增"、界面上只是高亮不出来，不报错。
+		*    所以要求 agent **先报范围、等用户确认**再拷。
 		*/
 		const REGISTER_PROMPT = [
 			"请把这个工作区建成「剧本批注工作台」。步骤：",
 			"",
 			"1. 在工作区根目录下建 `剧本工作台/` 文件夹。",
-			"2. 把小说原文**拷贝**一份（用 Copy-Item，字节复制，不要用 Get-Content/Set-Content）",
-			"   到 `剧本工作台/小说原文.txt`。用户原始的稿子一个字都不要动。",
+			"2. 把小说原文**准备**成 `剧本工作台/小说原文.txt`：",
+			"   · **原文不长**（比如几千行以内）：直接整份拷过来（用 Copy-Item，字节复制，",
+			"     不要用 Get-Content/Set-Content）。用户原始的稿子一个字都不要动。",
+			"   · **原文很长**：不要整份拷，**按章截**（长篇小说都是按章走的）：",
+			"     先判断我给你的这份剧本（一季）覆盖原文的哪几章（例如\"第 12 章—第 20 章\"），",
+			"     然后**从第 12 章的开头截到第 20 章的结尾**（整章保留，不要切在半章中间），",
+			"     再拷进 `小说原文.txt`。",
+			"     拷之前**把章的范围和依据报给我、等我确认**；原文没有分章标记、或者判断不出",
+			"     边界，就**直接问我**，不要猜、也不要先拷一整份。",
+			"   · 节选之后，原文行号**从 1 重新算**：后面登记的 sourceRanges 都以节选后的",
+			"     行号为准。以后要做这一季之外的集，得按同样的办法扩范围（也按章扩），",
+			"     并把受影响集数的 sourceRanges 跟着重算。",
 			"3. 逐集登记：把剧本正文按\"段落\"切开，每段判断它来自原文哪几行，",
 			"   然后用 novel_script_write_episode 工具提交（一次一集）。",
 			"   · 段落 = 可独立高亮和批注的一段文字，内部可以多行，但**不能有空白行**；",
@@ -1157,9 +2038,169 @@ window.__ModuleLoader__.load({
 					next: index >= 0 && index < list.length - 1 ? list[index + 1] : void 0
 				};
 			}, [version, episode]);
-			const ep = useEpisode(files, sessionId, version?.dir, episode?.episode);
+			const effTag = episode?.effective.tag ?? null;
+			const ep = useEpisode(files, sessionId, version?.dir, episode?.episode, effTag);
 			const novel = useNovel(files, sessionId, scan.phase === "ready" || scan.phase === "empty");
-			const anno = useAnnotations(sessionId, version?.dir, episode?.episode);
+			const anno = useAnnotations(sessionId, version?.dir, episode?.episode, effTag);
+			const [editMode, setEditMode] = (0, react.useState)(false);
+			const [drafts, setDrafts] = (0, react.useState)({});
+			const [savingDraft, setSavingDraft] = (0, react.useState)(false);
+			const [caretLine, setCaretLine] = (0, react.useState)(1);
+			const taRef = (0, react.useRef)(null);
+			const gutRef = (0, react.useRef)(null);
+			const latestVersionDir = scan.versions[scan.versions.length - 1]?.dir ?? null;
+			const structureOk = ep.phase === "ready" && !ep.issues.some((issue) => issue.level === "error");
+			const canEdit = version !== null && version.dir === latestVersionDir && structureOk;
+			const draftKey = `${version?.dir ?? ""}#${episode?.episode ?? 0}`;
+			/**
+			* 该集"这一版的正文"。
+			*
+			* 为什么是"把清单切出来的段落拼回去"：正文文件本来就是"段落之间一个空白行"
+			* 拼成的（`buildScriptText`），所以拼回去 == 文件本身。一旦清单与正文对不上
+			* （`ep.issues` 里有 error），拼回去可能丢内容 —— 那种情况**不允许编辑**。
+			*/
+			const baseDraft = (0, react.useMemo)(() => {
+				if (ep.phase !== "ready" || !structureOk) return null;
+				const text = ep.paragraphs.map((p) => p.text).join("\n\n");
+				return {
+					text,
+					baseText: text,
+					baseMinor: effTag,
+					snap: initialSnapshotState(text)
+				};
+			}, [
+				ep,
+				effTag,
+				structureOk
+			]);
+			const draft = drafts[draftKey] ?? baseDraft;
+			const draftDirty = draft !== null && draft.text !== draft.baseText;
+			/** 编辑面上每一行的行号（**编辑模式下左边只显示行号**，不显示段号）。 */
+			const draftLines = (0, react.useMemo)(() => draft === null ? [] : draft.text.split("\n"), [draft]);
+			/** 改草稿的唯一入口（顺带把快照状态机推进一步）。 */
+			const mutateDraft = (0, react.useCallback)((updater) => {
+				setDrafts((prev) => {
+					const cur = prev[draftKey] ?? baseDraft;
+					if (cur === null) return prev;
+					return {
+						...prev,
+						[draftKey]: updater(cur)
+					};
+				});
+			}, [draftKey, baseDraft]);
+			/**
+			* 光标移动 → 记下在第几行（底栏据此显示"光标所在段 → 原文哪几行"）。
+			*
+			* ⚠️ 从 ref 上取值，**不要用事件对象**：React 在事件派发结束后会把合成事件的
+			*    `currentTarget` 置成 null，而这个回调可能稍后才跑（见 textarea 上的注释，
+			*    2026-09-15 因此在输入法组合期间崩过一次）。
+			*/
+			const updateCaretFromRef = (0, react.useCallback)(() => {
+				const ta = taRef.current;
+				if (ta === null) return;
+				setCaretLine(lineOfOffset(ta.value, ta.selectionStart));
+			}, []);
+			/**
+			* 编辑期间的"对照预览"（纯机械算一遍，不落盘）：
+			* 拿当前草稿跟这一版的正文按内容对齐，就知道**光标所在那一段**对应原文哪几行。
+			* 段号与对应关系只有保存后才写进新清单；这里只是让改的时候有个参照。
+			*
+			* ⚠️ 用**停手 250ms 后的那份文本**算（`previewText`）：每敲一个字都重算一遍
+			*    对齐没必要，还会让打字手感变钝。行号槽不受影响 —— 那个只是数行数。
+			*/
+			const [previewText, setPreviewText] = (0, react.useState)(null);
+			(0, react.useEffect)(() => {
+				if (!editMode || draft === null) {
+					setPreviewText(null);
+					return;
+				}
+				const timer = window.setTimeout(() => setPreviewText(draft.text), 250);
+				return () => {
+					window.clearTimeout(timer);
+				};
+			}, [editMode, draft]);
+			const livePreview = (0, react.useMemo)(() => {
+				if (!editMode || previewText === null || ep.phase !== "ready" || !structureOk) return null;
+				return deriveParagraphs(ep.paragraphs.flatMap((p, index) => index === 0 ? p.lines : ["", ...p.lines]), previewText.split("\n"), ep.paragraphs.map((p) => ({
+					scriptLines: p.scriptLines,
+					sourceRanges: p.sourceRanges
+				})));
+			}, [
+				editMode,
+				previewText,
+				ep,
+				structureOk
+			]);
+			/** 光标所在那一段（光标落在两段之间时取前面最近的一段）。 */
+			const caretParagraph = (0, react.useMemo)(() => {
+				if (livePreview === null) return null;
+				const inside = livePreview.paragraphs.find((p) => caretLine >= p.span.start && caretLine <= p.span.end);
+				if (inside !== void 0) return inside;
+				let before = null;
+				for (const p of livePreview.paragraphs) if (p.span.start <= caretLine) before = p;
+				return before;
+			}, [livePreview, caretLine]);
+			/** "有没有没保存的改动"要告诉外面：关浮层的按钮在另一个模块里。 */
+			const anyDirty = (0, react.useMemo)(() => Object.values(drafts).some((d) => d.text !== d.baseText), [drafts]);
+			(0, react.useEffect)(() => {
+				setUnsaved(editMode && anyDirty);
+				return () => {
+					setUnsaved(false);
+				};
+			}, [editMode, anyDirty]);
+			/** 刷新 / 关标签页也拦一下。 */
+			(0, react.useEffect)(() => {
+				if (!editMode || !anyDirty) return;
+				const onUnload = (e) => {
+					e.preventDefault();
+					e.returnValue = "";
+				};
+				window.addEventListener("beforeunload", onUnload);
+				return () => {
+					window.removeEventListener("beforeunload", onUnload);
+				};
+			}, [editMode, anyDirty]);
+			/** 每秒推进一次快照状态机（停手 3 秒拍一张；组合期间它自己不拍）。 */
+			(0, react.useEffect)(() => {
+				if (!editMode) return;
+				const timer = window.setInterval(() => {
+					const now = Date.now();
+					setDrafts((prev) => {
+						const cur = prev[draftKey];
+						if (cur === void 0) return prev;
+						const next = snapshotReducer(cur.snap, {
+							kind: "tick",
+							at: clockOf(now),
+							nowMs: now
+						});
+						if (next === cur.snap) return prev;
+						return {
+							...prev,
+							[draftKey]: {
+								...cur,
+								snap: next
+							}
+						};
+					});
+				}, 1e3);
+				return () => {
+					window.clearInterval(timer);
+				};
+			}, [editMode, draftKey]);
+			/** 切走之前先问一句（有未保存改动时）。 */
+			const leaveGuard = (0, react.useCallback)(() => {
+				if (!draftDirty) return true;
+				return window.confirm("这一集还有没保存的人工改动，切走就丢了。确定切走吗？");
+			}, [draftDirty]);
+			const pickEpisodeGuarded = (0, react.useCallback)((episodeNo) => {
+				if (leaveGuard()) setPickEpisode(episodeNo);
+			}, [leaveGuard]);
+			const pickVersionGuarded = (0, react.useCallback)((dir) => {
+				if (!leaveGuard()) return;
+				setEditMode(false);
+				setPickVersion(dir);
+				setPickEpisode(null);
+			}, [leaveGuard]);
 			const [annoScope, setAnnoScope] = (0, react.useState)("episode");
 			const [allAnnotations, setAllAnnotations] = (0, react.useState)({});
 			const [allError, setAllError] = (0, react.useState)("");
@@ -1172,7 +2213,7 @@ window.__ModuleLoader__.load({
 				let alive = true;
 				setAllError("");
 				Promise.all(list.map(async (item) => {
-					const result = await loadAnnotations(sessionId, dir, item.episode);
+					const result = await loadAnnotations(sessionId, dir, item.episode, item.effective.tag);
 					return [item.episode, result];
 				})).then((pairs) => {
 					if (!alive) return;
@@ -1209,12 +2250,20 @@ window.__ModuleLoader__.load({
 				pinnedParagraphs,
 				hoverParagraph
 			]);
-			/** 当前要高亮的原文行（钉住多段时取并集）。 */
+			/** 当前要高亮的原文行（钉住多段时取并集；**编辑模式下跟着光标走**）。 */
 			const highlightLines = (0, react.useMemo)(() => {
 				const out = /* @__PURE__ */ new Set();
+				if (editMode && caretParagraph !== null) {
+					for (const [a, b] of caretParagraph.sourceRanges ?? []) for (let ln = a; ln <= b; ln += 1) out.add(ln);
+					return out;
+				}
 				for (const paragraph of activeParagraphs) for (const [a, b] of paragraph.sourceRanges ?? []) for (let ln = a; ln <= b; ln += 1) out.add(ln);
 				return out;
-			}, [activeParagraphs]);
+			}, [
+				activeParagraphs,
+				editMode,
+				caretParagraph
+			]);
 			/**
 			* 本集覆盖范围那根**竖条**的位置。
 			*
@@ -1254,6 +2303,90 @@ window.__ModuleLoader__.load({
 			const [pending, setPending] = (0, react.useState)(null);
 			const [problem, setProblem] = (0, react.useState)("");
 			const [toast, setToast] = (0, react.useState)("");
+			/** 开/关编辑模式。退出时若有未保存改动先问一句。 */
+			const toggleEditMode = (0, react.useCallback)(() => {
+				if (editMode) {
+					if (draftDirty && !window.confirm("还有没保存的改动，退出编辑就丢了。确定退出吗？")) return;
+					setEditMode(false);
+					return;
+				}
+				if (!canEdit) return;
+				setEditMode(true);
+				setCaretLine(1);
+			}, [
+				editMode,
+				draftDirty,
+				canEdit
+			]);
+			/** 放弃这次改动（什么都不写）。 */
+			const discardDraft = (0, react.useCallback)(() => {
+				if (!draftDirty) return;
+				if (!window.confirm("放弃这次改动？改的内容不会写进任何文件。")) return;
+				setDrafts((prev) => {
+					const next = { ...prev };
+					delete next[draftKey];
+					return next;
+				});
+			}, [draftDirty, draftKey]);
+			/**
+			* 保存：交给宿主写成**新小版本**（正文 + 清单 + 批注 + 历史）。
+			*
+			* ⚠️ 失败时**草稿原样留着**，把宿主的话原样显示出来 —— 不假装保存成功，
+			*    也不因为失败就把用户改的内容丢掉。
+			*/
+			const saveDraft = (0, react.useCallback)(async () => {
+				if (draft === null || version === null || episode === null) return;
+				if (sessionId === void 0 || sessionId === "") {
+					setToast("还没有可用的会话，存不了");
+					return;
+				}
+				const now = Date.now();
+				const snap = snapshotReducer(draft.snap, {
+					kind: "flush",
+					text: draft.text,
+					at: clockOf(now),
+					nowMs: now
+				});
+				const submitted = snapshotsForSubmit(snap);
+				setSavingDraft(true);
+				const result = await submitEdit({
+					sessionId,
+					version: version.dir,
+					episode: episode.episode,
+					baseMinor: draft.baseMinor,
+					baseText: draft.baseText,
+					text: draft.text,
+					snapshots: submitted.frames
+				});
+				setSavingDraft(false);
+				if (!result.ok) {
+					mutateDraft((cur) => ({
+						...cur,
+						snap
+					}));
+					setToast(`没保存成功：${result.error}`);
+					return;
+				}
+				setToast(`已保存为 ${result.minor}（+${result.summary.added} 行 / -${result.summary.removed} 行；清单已同步${result.annotations.stale.length === 0 ? "" : `，${result.annotations.stale.length} 条批注锚点失效`}）`);
+				setDrafts((prev) => {
+					const next = { ...prev };
+					delete next[draftKey];
+					return next;
+				});
+				wb.reload();
+				ep.reload();
+				anno.reload();
+			}, [
+				draft,
+				version,
+				episode,
+				sessionId,
+				mutateDraft,
+				draftKey,
+				wb,
+				ep,
+				anno
+			]);
 			(0, react.useEffect)(() => {
 				if (toast === "") return;
 				const timer = window.setTimeout(() => setToast(""), 2600);
@@ -1274,6 +2407,7 @@ window.__ModuleLoader__.load({
 			* 还是"多行一段"由 agent 决定。
 			*/
 			const onScriptMouseUp = (0, react.useCallback)((e) => {
+				if (editMode) return;
 				const multi = e.ctrlKey || e.metaKey;
 				const releaseX = e.clientX;
 				const releaseY = e.clientY;
@@ -1313,7 +2447,7 @@ window.__ModuleLoader__.load({
 					setProblem("");
 					if (multi) window.getSelection()?.removeAllRanges();
 				}, 10);
-			}, []);
+			}, [editMode]);
 			/**
 			* Ctrl 连选期间那几处覆盖的段号。
 			*
@@ -1445,6 +2579,38 @@ window.__ModuleLoader__.load({
 				});
 			}, [pinnedParagraphs, ep.paragraphs]);
 			/**
+			* 编辑模式下：**光标走到哪一段，左边原文就滚到对应位置**。
+			*
+			* 上面那条是"点选/定位"触发的，编辑时没有点选，所以原文栏一直不动 ——
+			* 主人 2026-09-15 反馈："编辑模式下原文不会自动跳到光标所在的那一行"。
+			*
+			* ⚠️ 只在**目标行当前看不见**时才滚：否则光标每换一行都滚一次，
+			*    正打着字屏幕一直跟着动，很难读。滚的时候**上方留两行**上下文
+			*    （和提示词对照那边同一个口径）。`sourceRanges` 为空的段（新增内容）
+			*    没有可滚的目标 —— 底栏会写"原文里没有对应（新增）"，这里什么也不做。
+			*/
+			(0, react.useEffect)(() => {
+				if (!editMode || caretParagraph === null) return;
+				const ranges = caretParagraph.sourceRanges;
+				if (ranges === null || ranges.length === 0) return;
+				const box = novelRef.current;
+				if (box === null) return;
+				const first = Math.min(...ranges.map((range) => range[0]));
+				const last = Math.max(...ranges.map((range) => range[1]));
+				const firstEl = box.querySelector(`[data-ln="${first}"]`);
+				if (firstEl === null) return;
+				const lastEl = box.querySelector(`[data-ln="${last}"]`) ?? firstEl;
+				const boxTop = box.getBoundingClientRect().top;
+				const top = firstEl.getBoundingClientRect().top - boxTop + box.scrollTop;
+				const bottom = lastEl.getBoundingClientRect().bottom - boxTop + box.scrollTop;
+				if (top >= box.scrollTop && bottom <= box.scrollTop + box.clientHeight) return;
+				const lineHeight = firstEl.offsetHeight > 0 ? firstEl.offsetHeight : 20;
+				box.scrollTo({
+					top: Math.max(0, top - lineHeight * 2),
+					behavior: "smooth"
+				});
+			}, [editMode, caretParagraph]);
+			/**
 			* 删除一条批注。
 			*
 			* 批注是**按集一个文件**存的，所以"全部"模式下要写回**它所属那一集**的文件，
@@ -1459,7 +2625,8 @@ window.__ModuleLoader__.load({
 				}
 				const dir = version?.dir;
 				if (sessionId === void 0 || sessionId === "" || dir === void 0) return;
-				saveAnnotations(sessionId, dir, episodeNo, (allAnnotations[episodeNo] ?? []).filter((a) => a.id !== id)).then((result) => {
+				const list = (allAnnotations[episodeNo] ?? []).filter((a) => a.id !== id);
+				saveAnnotations(sessionId, dir, episodeNo, version?.episodes.find((item) => item.episode === episodeNo)?.effective.tag ?? null, list).then((result) => {
 					if (result.ok) {
 						setAllAnnotations((prev) => ({
 							...prev,
@@ -1475,6 +2642,23 @@ window.__ModuleLoader__.load({
 				version,
 				sessionId
 			]);
+			/**
+			* 这条批注挂的某一处还成不成立（设计文档 §7.3：**锚点失效是正常状态，不是错误**）。
+			*
+			* 判据只有一条：那一处引文还能不能在对应段落的正文里找到。找不到就标出来，
+			* **不偷偷挪到同名文字上**。
+			* 别的集的批注（"全部"模式）这里返回 `null`（不判）：没读它们的正文。
+			*
+			* ⚠️ 定义放在这里（而不是批注卡旁边）：组装下发指令时也要用它，
+			*    而 `sendBatch` 比批注卡靠前 —— 放在后面会被"先用后声明"卡住。
+			*/
+			const regionIsValid = (0, react.useCallback)((region, episodeNo) => {
+				if (episode === null || episodeNo !== episode.episode || ep.phase !== "ready") return null;
+				const from = ep.paragraphs[region.paragraph - 1];
+				if (from === void 0 || from.broken) return false;
+				const end = region.endParagraph === void 0 ? region.paragraph : region.endParagraph;
+				return containsQuote(ep.paragraphs.slice(region.paragraph - 1, end).map((p) => p.text).join("\n"), region.quote);
+			}, [episode, ep]);
 			/** 这一轮要下发的条目（按集模式只有当前集；全部模式是所有集）。 */
 			const sendItems = (0, react.useMemo)(() => {
 				if (annoScope === "episode") return episode === null ? [] : anno.annotations.map((a) => ({
@@ -1492,49 +2676,73 @@ window.__ModuleLoader__.load({
 				allAnnotations
 			]);
 			const sendCount = sendItems.length;
+			/** 这一版里"有人工改动"的集（有效版本是小版本的那些）。 */
+			const manualEpisodes = (0, react.useMemo)(() => (version?.episodes ?? []).filter((entry) => entry.effective.tag !== null).map((entry) => entry.episode), [version]);
+			/** 当前"按集/全部"范围里，有几集带人工改动。 */
+			const manualInScope = annoScope === "all" ? manualEpisodes.length : manualEpisodes.filter((no) => no === episode?.episode).length;
 			/**
-			* 下发这一批批注。
+			* 组装"交给 agent"的那份指令（实施计划 §10）。
+			*
+			* ⚠️ 一份指令**同时**包含两件事：**人工已经改过的地方**（含历史记录文件路径）
+			*    与**批注**（含"锚点已失效"的提醒），并显式写明"以最新版本为基线、
+			*    旧版本只作参考"。为什么必须一起给：人工改过之后，批注的引文可能已经
+			*    对不上正文了 —— agent 只看批注会改错地方，只看人工改动又会漏掉批注。
+			*
+			* 这里只负责"把这一轮牵涉到的集与批注凑齐"；**文案本身在
+			* `shared/instruction.ts`**（纯函数 + 回归用例），免得这段最关键的话没人测。
+			*/
+			const buildInstruction$1 = (0, react.useCallback)((items) => {
+				if (version === null) return "";
+				const grouped = /* @__PURE__ */ new Map();
+				for (const item of items) {
+					const list = grouped.get(item.episode) ?? [];
+					list.push(item.a);
+					grouped.set(item.episode, list);
+				}
+				const inScope = new Set(grouped.keys());
+				for (const no of manualEpisodes) if (annoScope === "all" || no === episode?.episode) inScope.add(no);
+				if ([...inScope].sort((a, b) => a - b).length === 0) return "";
+				const episodes = [...inScope].sort((a, b) => a - b).map((no) => {
+					const entry = version.episodes.find((e) => e.episode === no);
+					const list = grouped.get(no) ?? [];
+					return {
+						episode: no,
+						tag: entry?.effective.tag ?? null,
+						annotations: list,
+						staleIds: list.filter((a) => (a.regions ?? []).some((r) => regionIsValid(r, no) === false)).map((a) => a.id)
+					};
+				});
+				return buildInstruction({
+					bookLine: novel.lines[0] ?? "",
+					versionDir: version.dir,
+					scope: annoScope,
+					episodes,
+					novelFile: novelPath()
+				});
+			}, [
+				version,
+				episode,
+				annoScope,
+				novel.lines,
+				manualEpisodes,
+				regionIsValid
+			]);
+			/**
+			* 下发这一批（批注 + 人工改动）。
 			*
 			* ⚠️ 为什么是"复制到剪贴板"而不是直接写官方输入框：`shell.overlay` 这个席位
 			* 拿不到 `inputActions`（只有 `conversation.*` 那些席位有），所以浮层里
 			* 没法定向写官方输入框。主人粘一下即可（这是流程的下一步）。
 			*/
 			const sendBatch = (0, react.useCallback)(() => {
-				if (sendItems.length === 0) return;
-				const grouped = /* @__PURE__ */ new Map();
-				for (const item of sendItems) {
-					const list = grouped.get(item.episode) ?? [];
-					list.push(item.a);
-					grouped.set(item.episode, list);
-				}
-				const episodes = [...grouped.entries()].sort((x, y) => x[0] - y[0]);
-				const where = annoScope === "all" ? `v${version?.version ?? "?"}（${episodes.length} 集）` : `v${version?.version ?? "?"} 第 ${episode?.episode ?? "?"} 集`;
-				const body = [];
-				for (const [episodeNo, list] of episodes) {
-					body.push(`【第 ${episodeNo} 集】`);
-					for (const a of list) {
-						const spans = (a.regions ?? []).map((r) => `${regionLabel(r)}「${r.quote.replaceAll("\n", " ")}」`).join("；");
-						body.push(`· ${spans}——${a.problem}`);
-					}
-					body.push("");
-				}
-				const text = [
-					`请按下面这批批注改稿（${where}）：`,
-					"",
-					...body,
-					"改完请出新版本：",
-					"1. 用 Copy-Item -Recurse 把这一版目录整份复制成新版本；",
-					"2. 删掉新版本里复制过来的批注文件（不是写成空数组）；",
-					"3. 对改过的每一集重新调 novel_script_write_episode；",
-					"4. 写新版本的 变更记录.txt；",
-					"5. 最后把这一版批注文件里已处理的条目改成 done: true、resolvedIn 写新版本号。"
-				].join("\n");
-				navigator.clipboard?.writeText(text).then(() => setToast(`已复制 ${sendItems.length} 条批注的指令 —— 粘到对话里发给 AI 即可`), () => setToast("复制失败（浏览器拒绝剪贴板）"));
+				const text = buildInstruction$1(sendItems);
+				if (text === "") return;
+				navigator.clipboard?.writeText(text).then(() => setToast(`已复制指令（${sendCount} 条批注${manualInScope === 0 ? "" : ` + ${manualInScope} 集人工改动`}） —— 粘到对话里发给 AI 即可`), () => setToast("复制失败（浏览器拒绝剪贴板）"));
 			}, [
+				buildInstruction$1,
 				sendItems,
-				annoScope,
-				version,
-				episode
+				sendCount,
+				manualInScope
 			]);
 			const geo = useWorkbenchGeometry();
 			const wbRef = geo.ref;
@@ -1544,7 +2752,7 @@ window.__ModuleLoader__.load({
 			36 = 样式里圆角 18 的两倍，正好是一枚完整的胶囊。 */
 			const PILL_H = 36;
 			(0, react.useEffect)(() => {
-				if (isMin) return;
+				if (isMin || editMode) return;
 				const onKey = (e) => {
 					if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
 					if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
@@ -1562,7 +2770,8 @@ window.__ModuleLoader__.load({
 			}, [
 				episodeNav,
 				pending,
-				isMin
+				isMin,
+				editMode
 			]);
 			const startDrag = (0, react.useCallback)((e, dragMode) => {
 				const el = wbRef.current;
@@ -1630,6 +2839,10 @@ window.__ModuleLoader__.load({
 			if (sessionSource === "fallback") notices.push("当前没有选中会话，借用的是工作区里的另一个会话；想更准请切到剧本所在工作区的会话。");
 			const episodeLabel = episode === null ? "—" : `${episode.episode}`;
 			const versionLabel = version === null ? "—" : `v${version.version}`;
+			/** 这一集自己的版本标签（`v2.2（人工）` / `v2`）；没选中集时是空串。 */
+			const episodeVersionLabel = episode === null || version === null ? "" : effectiveLabel(episode, version.version);
+			/** 选集下拉里每一项的文案：基线显示 `第 3 集 · v2`，人工版显示 `第 1 集 · v2.2（人工）`。 */
+			const episodeOptionLabel = (entry) => version === null ? `第 ${entry.episode} 集` : `第 ${entry.episode} 集 · ${effectiveLabel(entry, version.version)}`;
 			/**
 			* 一张批注卡。
 			*
@@ -1640,6 +2853,7 @@ window.__ModuleLoader__.load({
 				const episodeOfCard = episodeNo ?? episode?.episode ?? 0;
 				const regions = a.regions ?? [];
 				const first = regions[0];
+				const staleCount = regions.filter((r) => regionIsValid(r, episodeOfCard) === false).length;
 				return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 					className: `ns-acard${a.done ? " ns-acard-done" : ""}`,
 					children: [
@@ -1666,6 +2880,10 @@ window.__ModuleLoader__.load({
 										" 处"
 									]
 								}) : null,
+								staleCount > 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+									className: "ns-tag ns-tag-stale",
+									children: ["锚点已失效 ×", staleCount]
+								}) : null,
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 									className: `ns-tag${a.done ? " ns-tag-done" : ""}`,
 									children: a.done ? `已处理${a.resolvedIn === null ? "" : ` · ${a.resolvedIn}`}` : "未处理"
@@ -1687,18 +2905,25 @@ window.__ModuleLoader__.load({
 								})
 							]
 						}),
-						regions.map((region, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: "ns-acard-q",
-							children: [
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-									className: "ns-acard-ln",
-									children: regionLabel(region)
-								}),
-								"“",
-								region.quote.length > 60 ? `${region.quote.slice(0, 60)}…` : region.quote,
-								"”"
-							]
-						}, `${region.paragraph}-${index}`)),
+						regions.map((region, index) => {
+							const valid = regionIsValid(region, episodeOfCard);
+							return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: `ns-acard-q${valid === false ? " ns-acard-q-stale" : ""}`,
+								children: [
+									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+										className: "ns-acard-ln",
+										children: [regionLabel(region), valid === false ? "（旧版段号）" : ""]
+									}),
+									valid === false ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: "ns-tag-stale",
+										children: "引文已找不到"
+									}) : null,
+									"“",
+									region.quote.length > 60 ? `${region.quote.slice(0, 60)}…` : region.quote,
+									"”"
+								]
+							}, `${region.paragraph}-${index}`);
+						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 							className: "ns-why",
 							children: a.problem
@@ -1756,7 +2981,7 @@ window.__ModuleLoader__.load({
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 								className: "ns-meta",
-								children: scan.phase === "missing" ? "这个工作区还没登记" : `${versionLabel} · 第 ${episodeLabel} 集`
+								children: scan.phase === "missing" ? "这个工作区还没登记" : `${versionLabel} · 第 ${episodeLabel} 集${effTag === null ? "" : ` · ${episodeVersionLabel}`}`
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "ns-spacer" }),
 							!isMin && scan.versions.length > 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
@@ -1766,7 +2991,7 @@ window.__ModuleLoader__.load({
 									title: "上一集（←）",
 									disabled: episodeNav.prev === void 0,
 									onClick: () => {
-										if (episodeNav.prev !== void 0) setPickEpisode(episodeNav.prev.episode);
+										if (episodeNav.prev !== void 0) pickEpisodeGuarded(episodeNav.prev.episode);
 									},
 									children: "◀"
 								}),
@@ -1776,7 +3001,7 @@ window.__ModuleLoader__.load({
 									title: "下一集（→）",
 									disabled: episodeNav.next === void 0,
 									onClick: () => {
-										if (episodeNav.next !== void 0) setPickEpisode(episodeNav.next.episode);
+										if (episodeNav.next !== void 0) pickEpisodeGuarded(episodeNav.next.episode);
 									},
 									children: "▶"
 								}),
@@ -1784,10 +3009,7 @@ window.__ModuleLoader__.load({
 									className: "ns-sel",
 									title: "选版本",
 									value: version?.version ?? "",
-									onChange: (e) => {
-										setPickVersion(e.target.value);
-										setPickEpisode(null);
-									},
+									onChange: (e) => pickVersionGuarded(e.target.value),
 									children: scan.versions.map((v) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("option", {
 										value: v.version,
 										children: [
@@ -1803,15 +3025,11 @@ window.__ModuleLoader__.load({
 									className: "ns-sel",
 									title: "选集",
 									value: episode === null ? "" : String(episode.episode),
-									onChange: (e) => setPickEpisode(Number(e.target.value)),
+									onChange: (e) => pickEpisodeGuarded(Number(e.target.value)),
 									disabled: (version?.episodes.length ?? 0) === 0,
-									children: (version?.episodes ?? []).map((x) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("option", {
+									children: (version?.episodes ?? []).map((x) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
 										value: String(x.episode),
-										children: [
-											"第 ",
-											x.episode,
-											" 集"
-										]
+										children: episodeOptionLabel(x)
 									}, x.episode))
 								})
 							] }) : null,
@@ -1821,6 +3039,7 @@ window.__ModuleLoader__.load({
 								title: "刷新",
 								onClick: () => {
 									wb.reload();
+									ep.reload();
 									anno.reload();
 								},
 								children: "⟳"
@@ -2007,13 +3226,133 @@ window.__ModuleLoader__.load({
 											" 集剧本 · ",
 											versionLabel
 										] }),
+										effTag === null ? null : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+											className: "ns-tag",
+											children: [effTag, "（人工）"]
+										}),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "ns-spacer" }),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 											className: "ns-sub",
-											children: ep.phase === "ready" ? `${ep.totalLines} 行 · ${ep.paragraphs.length} 段` : ep.phase === "loading" ? "读取中…" : "—"
+											children: editMode ? draftDirty ? "编辑中 · 有未保存改动" : "编辑中" : ep.phase === "ready" ? `${ep.totalLines} 行 · ${ep.paragraphs.length} 段` : ep.phase === "loading" ? "读取中…" : "—"
+										}),
+										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
+											type: "button",
+											className: `ns-toggle${editMode ? " ns-toggle-on" : ""}`,
+											disabled: !editMode && !canEdit,
+											title: editMode ? "退出编辑模式（回到标注）" : canEdit ? "直接编辑这一集：保存会写成新小版本，老版本一个字节都不动" : structureOk ? "只有最新的大版本才能直接编辑（老版本只读）" : "清单与正文对不上，先让 agent 修好再编辑",
+											"aria-pressed": editMode,
+											onClick: toggleEditMode,
+											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: "ns-toggle-dot" }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: editMode ? "编辑中" : "直接编辑" })]
 										})
 									]
-								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								}), editMode && draft !== null ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: "ns-edit",
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+										className: "ns-edit-body",
+										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+											className: "ns-edit-gut",
+											ref: gutRef,
+											"aria-hidden": true,
+											children: draftLines.map((_, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+												className: "ns-edit-ln",
+												children: index + 1
+											}, index))
+										}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("textarea", {
+											ref: taRef,
+											className: "ns-edit-ta",
+											value: draft.text,
+											spellCheck: false,
+											wrap: "off",
+											"aria-label": "这一集剧本正文",
+											onChange: (e) => {
+												const text = e.target.value;
+												const now = Date.now();
+												mutateDraft((cur) => ({
+													...cur,
+													text,
+													snap: snapshotReducer(cur.snap, {
+														kind: "input",
+														text,
+														nowMs: now
+													})
+												}));
+											},
+											onCompositionStart: () => {
+												const text = taRef.current?.value ?? "";
+												const now = Date.now();
+												mutateDraft((cur) => ({
+													...cur,
+													snap: snapshotReducer(cur.snap, {
+														kind: "compositionStart",
+														text,
+														nowMs: now
+													})
+												}));
+											},
+											onCompositionEnd: () => {
+												const text = taRef.current?.value ?? "";
+												const now = Date.now();
+												mutateDraft((cur) => ({
+													...cur,
+													text,
+													snap: snapshotReducer(cur.snap, {
+														kind: "compositionEnd",
+														text,
+														at: clockOf(now),
+														nowMs: now
+													})
+												}));
+											},
+											onBlur: () => {
+												const text = taRef.current?.value ?? "";
+												const now = Date.now();
+												mutateDraft((cur) => ({
+													...cur,
+													text,
+													snap: snapshotReducer(cur.snap, {
+														kind: "blur",
+														text,
+														at: clockOf(now),
+														nowMs: now
+													})
+												}));
+											},
+											onScroll: () => {
+												const ta = taRef.current;
+												const gut = gutRef.current;
+												if (ta !== null && gut !== null) gut.scrollTop = ta.scrollTop;
+											},
+											onSelect: updateCaretFromRef,
+											onClick: updateCaretFromRef,
+											onKeyUp: updateCaretFromRef
+										})]
+									}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+										className: "ns-edit-bar",
+										children: [
+											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+												className: "ns-edit-where",
+												children: caretParagraph === null ? "光标不在正文里" : `第 ${caretParagraph.index} 段 · ${caretParagraph.sourceRanges === null ? "原文里没有对应（新增）" : `→ 原文 ${caretParagraph.sourceRanges.map((r) => `L${r[0]}—L${r[1]}`).join("、")}`}${caretParagraph.needsReview ? " · 待复核" : ""}`
+											}),
+											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { className: "ns-spacer" }),
+											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+												type: "button",
+												className: "ns-btn",
+												disabled: !draftDirty || savingDraft,
+												onClick: discardDraft,
+												children: "放弃"
+											}),
+											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+												type: "button",
+												className: "ns-btn ns-btn-primary",
+												disabled: !draftDirty || savingDraft,
+												onClick: () => {
+													saveDraft();
+												},
+												children: savingDraft ? "保存中…" : "保存"
+											})
+										]
+									})]
+								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 									className: "ns-col-bd",
 									ref: scriptRef,
 									children: ep.phase !== "ready" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
@@ -2117,20 +3456,16 @@ window.__ModuleLoader__.load({
 									}),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										className: "ns-col-foot",
-										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
+										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 											type: "button",
 											className: "ns-btn ns-btn-primary",
-											disabled: sendCount === 0,
-											title: sendCount === 0 ? "还没有批注" : "把这一批批注整理成指令复制到剪贴板",
+											disabled: sendCount === 0 && manualInScope === 0,
+											title: sendCount === 0 && manualInScope === 0 ? "还没有批注，也没有人工改动" : "把批注与人工改动整理成一份指令，复制到剪贴板",
 											onClick: sendBatch,
-											children: [
-												"下发 ",
-												sendCount,
-												" 条批注"
-											]
+											children: manualInScope === 0 ? `下发 ${sendCount} 条批注` : `下发 ${sendCount} 条批注 + ${manualInScope} 集人工改动`
 										}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 											className: "ns-foot-hint",
-											children: annoScope === "all" ? "这一版所有集的批注一起下发" : "复制成指令 → 粘到对话里发给 AI"
+											children: annoScope === "all" ? "这一版所有集一起下发" : "复制成指令 → 粘到对话里发给 AI"
 										})]
 									})
 								]
@@ -2893,6 +4228,40 @@ body.ns-resizing { user-select: none; }
 }
 .ns-para-new { color: var(--dsw-alias-state-warn-primary); }
 
+/* ══ 人工编辑模式（整集一个编辑面 + 左边行号槽）══════════════════════════
+   外观刻意跟 .ns-col-bd / .ns-para-tx 对齐（字号 13.5、行高 1.9、内边距
+   11px 14px 30px）：主人要求"打开编辑模式中间栏样式不变，只是能改"。
+   ⚠️ 行号槽与文本框必须**同字号同 line-height**，否则行号会和正文错开半行。 */
+.ns-edit { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ns-edit-body { flex: 1; min-height: 0; display: flex; align-items: stretch; overflow: hidden; }
+.ns-edit-gut {
+  flex: none; width: 40px; overflow: hidden; padding: 11px 6px 30px 0;
+  text-align: right; user-select: none;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13.5px; line-height: 1.9;
+  color: var(--dsw-alias-label-tertiary);
+}
+.ns-edit-ln { white-space: nowrap; }
+.ns-edit-ta {
+  flex: 1; min-width: 0; margin: 0; padding: 11px 14px 30px 0;
+  border: 0; outline: none; resize: none; background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit; font-size: 13.5px; line-height: 1.9;
+  white-space: pre; overflow: auto; tab-size: 2;
+}
+.ns-edit-ta::selection { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 35%, transparent); }
+.ns-edit-bar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-top: 1px solid var(--dsw-alias-border-l1);
+}
+.ns-edit-where {
+  font-size: 11.5px; color: var(--dsw-alias-label-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 批注锚点已失效（设计文档 §7.3：正常状态，标出来就行，不是错误） */
+.ns-tag-stale { color: var(--dsw-alias-state-error-primary); }
+.ns-acard-q-stale { opacity: .75; }
+
 /* ══ 写批注的小框（跟着选区浮出来的那个）═════════════════════════════
    position: fixed —— 它挂在浮层根下（不在工作台面板里），所以不会被面板裁剪；
    left/top 由 JS 按选区矩形算好并夹进视口。 */
@@ -3089,6 +4458,17 @@ body.ns-resizing { user-select: none; }
 			}, []);
 			return open;
 		}
+		/**
+		* 开关工作台。
+		*
+		* ⚠️ 关之前要问一句：人工编辑模式里可能有**没保存的改动**，而浮层一关，
+		*    工作台组件就卸载了，草稿跟着没（草稿只在内存里，磁盘上一个字都没写）。
+		*    有没有改动由工作台通过 `unsaved.ts` 那个小开关告诉这里。
+		*/
+		function toggleOpen(next) {
+			if (!next && hasUnsaved() && !window.confirm("工作台里还有没保存的人工改动，关掉就丢了。确定关掉吗？")) return;
+			setOpen(next);
+		}
 		function apply(ctx) {
 			console.info("[novel-script] client apply: start");
 			handles.files = ctx.remote.workspaceFiles;
@@ -3146,7 +4526,7 @@ body.ns-resizing { user-select: none; }
 				title: isOpen ? "收起剧本批注工作台" : "打开剧本批注工作台",
 				"aria-label": "剧本批注",
 				"aria-pressed": isOpen,
-				onClick: () => setOpen(!isOpen),
+				onClick: () => toggleOpen(!isOpen),
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
 					width: wide ? 16 : 18,
 					height: wide ? 16 : 18,
@@ -3192,7 +4572,7 @@ body.ns-resizing { user-select: none; }
 				className: `ns-chip${isOpen ? " ns-chip-on" : ""}`,
 				title: isOpen ? "收起剧本批注工作台" : "打开剧本批注工作台",
 				"aria-pressed": isOpen,
-				onClick: () => setOpen(!isOpen),
+				onClick: () => toggleOpen(!isOpen),
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
 					width: "13",
 					height: "13",
