@@ -19,15 +19,18 @@
 agent" —— 因为逐集逐块人肉核对"这一版和上一版哪儿不一样、这一块来自剧本哪几行"，
 是 AI 视频流水线上最容易出错、也最耗时间的一环。
 
+> 剧本批注从 **v1.5.0** 起还能**直接在界面上改正文**：保存**不动老版本**，而是新增一个
+> "小版本"（正文 / 清单 / 批注 / 改动记录四份一起生成），改了什么还留一份记录给 agent 看。
+
 - 默认端口 **3099**，数据（对话记录、设置、密钥）存在 `%LOCALAPPDATA%\DSH-Web`，
   和程序文件夹分开，所以升级只要替换程序文件夹，记录不会丢。
-- 界面上能正常用 `dsh` 的全部能力；另有 2 个通用插件（人设切换、余额挂件）。
+- 界面上能正常用 `dsh` 的全部能力；另有 3 个通用插件（人设切换、皮肤、余额挂件）。
 
 ## 这个仓库里有什么 / 没什么
 
 | | |
 |---|---|
-| **有** | 启动器与诊断脚本、使用说明、版本更新记录、4 个自带插件、打包与校验脚本、许可证与第三方声明 |
+| **有** | 启动器与诊断脚本、使用说明、版本更新记录、5 个自带插件、打包与校验脚本、许可证与第三方声明 |
 | **没有** | `deepseek-harness.exe`（232 MB）、`deepseek-harness-rg.exe`、以及整包 zip |
 
 超过 100 MB 的单个文件 GitHub 直接拒收，而且每次重新打包 exe 的哈希都会变，
@@ -38,11 +41,11 @@ agent" —— 因为逐集逐块人肉核对"这一版和上一版哪儿不一�
 
 ## 下载与校验
 
-最新版：**[v1.3.1](https://github.com/destr-z/dsh-web-portable/releases/tag/v1.3.1)**
-→ [`DSH-Web-v1.3.1.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v1.3.1/DSH-Web-v1.3.1.zip)（71.2 MB）
+最新版：**[v1.5.0](https://github.com/destr-z/dsh-web-portable/releases/tag/v1.5.0)**
+→ [`DSH-Web-v1.5.0.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v1.5.0/DSH-Web-v1.5.0.zip)（71.3 MB）
 
 ```
-DSH-Web-v1.3.1.zip            SHA256  32A76E42CB835FD5CD0E9D5BD29C467F2AFB7D9FE925B147DF66168622E32F51
+DSH-Web-v1.5.0.zip            SHA256  F1AE2D05859D4B0EC921E3F426762E8F4EA582981F0D924C2694DBB4F39DD960
 程序\deepseek-harness.exe     SHA256  2480903F911FA53C9C7CEC83BF806535A06F77701A5BEF6C7862E8A3313DB67B
 ```
 
@@ -52,8 +55,9 @@ DSH-Web-v1.3.1.zip            SHA256  32A76E42CB835FD5CD0E9D5BD29C467F2AFB7D9FE9
 (Get-FileHash '程序\deepseek-harness.exe' -Algorithm SHA256).Hash
 ```
 
-包内 `版本更新记录.txt` 里逐个文件都记了 SHA256，可对照。exe 哈希在 v1.3.0 / v1.3.1
-之间**相同**（这两版都没重建 exe），换到重建过的版本时该值会变，届时以该版记录为准。
+包内 `版本更新记录.txt` 里逐个文件都记了 SHA256，可对照。exe 哈希**自 v1.3.0 起一直没变**
+（v1.3.0 / v1.3.1 / v1.4.0 / v1.5.0 这几版都没重建 exe，只换随包的启动器/说明/插件）；
+换到重建过的版本时该值会变，届时以该版记录为准。
 
 ## 怎么用
 
@@ -69,15 +73,16 @@ Windows 第一次运行会弹「已保护你的电脑」，因为 exe 没有数�
 
 详细说明（端口、日志位置、常见问题、插件怎么加/怎么卸）见包内 `使用说明.txt`。
 
-## 自带的 4 个插件
+## 自带的 5 个插件
 
-其中 3 个是我自己写的（含上面那两个剧本工作台），1 个是第三方作品。
+其中 4 个是我自己写的（含上面那两个剧本工作台），1 个是第三方作品。
 
 | 插件 | 是什么 | 作者 | 许可 |
 |---|---|---|---|
-| `@dsh-external/dsh-novel-script` | **剧本批注** —— 小说改剧本：逐集对照原文与剧本，划词写批注，批注下发让 AI 改稿 | 我（[destr-z](https://github.com/destr-z)） | MIT |
+| `@dsh-external/dsh-novel-script` | **剧本批注** —— 小说改剧本：逐集对照原文与剧本，划词写批注，批注下发让 AI 改稿；v1.5.0 起还能直接改正文（保存 = 新增一个小版本） | 我（[destr-z](https://github.com/destr-z)） | MIT |
 | `@dsh-external/dsh-prompt-compare` | **提示词对照** —— 剧本定稿后：逐集对照剧本与视频提示词，划词写批注，批注下发让 AI 改提示词 | 我（[destr-z](https://github.com/destr-z)） | MIT |
 | `@dsh-external/dsh-persona-switcher` | **人设切换** —— 按会话记住人设模板，设置页管理、输入框上方一键切换 | 我（[destr-z](https://github.com/destr-z)），已单独开源：[dsh-persona-switcher](https://github.com/destr-z/dsh-persona-switcher) | BSD-3-Clause |
+| `@dsh-external/dsh-ui-skin` | **皮肤** —— 在浅色/深色之上再叠一层皮肤（DeepSeek 官方蓝 / Codex / Claude Code），设置页三张卡点选；可自备三张图放进素材目录，缺图就回退内置矢量 | 我（[destr-z](https://github.com/destr-z)） | MIT |
 | `dsh-whale-widget` | **小鲸鱼余额挂件** —— 界面右下角显示 DeepSeek 余额、今日已用、每轮消耗 | 第三方，**MeteorNOX** | MIT |
 
 **第三方作品声明**（只有这一个是别人写的，按它的许可随包分发）：
@@ -180,7 +185,7 @@ notices/                    再分发主程序必需的许可证与第三方声�
 - 主程序 `deepseek-harness.exe`：MIT，`Copyright (c) 2026 DeepSeek`，
   见 [notices/LICENSE-deepseek-harness.txt](notices/LICENSE-deepseek-harness.txt)。
 - 主程序所含第三方组件：见 [notices/THIRD_PARTY_NOTICES.md](notices/THIRD_PARTY_NOTICES.md)。
-- 自带插件各自的许可见上表；四者的 `package.json` 与包内 `LICENSE` 均为准。
+- 自带插件各自的许可见上表；五者的 `package.json` 与包内 `LICENSE` 均为准。
 - 命名与素材遵循官方
   [BRAND_GUIDELINES](https://github.com/deepseek-ai/deepseek-harness/blob/main/BRAND_GUIDELINES.md)：
   项目名只用 "DSH" 缩写，不暗示官方背书。
