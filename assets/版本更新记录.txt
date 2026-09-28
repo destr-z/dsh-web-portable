@@ -17,7 +17,123 @@
 
 
 ========================================
-【v2.0.0】2026-09-16  ·  内置内核换代：0.1.5-rc.2 → 0.1.7-rc.2（重建 exe）
+【v2.0.1】2026-09-28  ·  修掉「设置 ▸ 插件」里的元信息错误红字（重建 exe）
+========================================
+
+■ 一句话
+
+  v2.0.0 换上 0.1.7 内核后，「设置 ▸ 插件」里三个实验性插件（智能体团队 / 自动授权审查 /
+  语音输入）下面各有一行红色 `元信息错误: … icon.svg: ENOENT`。本版修掉它。
+  这是**显示层**的问题：那三个插件照常能启用、能运行（内核文档明确写着"元信息诊断不改变
+  启停状态或 fiber 阶段"）。
+
+  同一批还修掉另一处「显示层」问题：随包的 5 个插件（剧本批注 / 提示词对照 / 人设切换 /
+  皮肤 / 小鲸鱼）**一直不出现在插件面板里** —— 启动器只把它们登记成"参与装配的层"
+  （`dsh.profile.bundles`），没登记成 profile 的依赖，而面板恰是按依赖判定"装过没有"。
+
+  还有第三处：**人设切换 / 皮肤 这两个插件的宿主半边在便携版里根本没激活**
+  （`failed to import`）—— 面板里那两行显示「未运行」、「皮肤」也不会生效
+  （`body` 上没有 `data-dsh-ui-skin` 标记）。原因与修法见下面单独一节。
+
+  第四处：**便携版打开后不再自动弹出网页**。单文件 exe 里"打开默认浏览器"这一步会
+  **静默失败** —— 连 `could not open the default browser` 都不打印，而启动器原来的兜底
+  恰恰只在读到这句话时才动手，于是既不弹窗、也不兜底。现在改成：启动器给 exe 传
+  `--no-open`，自己拿到带 token 的地址后 `Start-Process` 打开（用户显式传 `--no-open`
+  时保持不打开）。实测：exe 命令行确实带上 `--no-open`，启动后约 4 秒拉起新浏览器进程。
+
+■ 原因（出在单文件 exe 的资产打包清单）
+
+  · 便携版把内核「烤」进单文件 exe：打包时只把**匹配资产通配清单**的文件放进快照，
+    运行时挂载为 `C:\snapshot\<仓库目录名>\…`。
+  · 那三个插件的 `package.json` 里声明了 `"icon": "./icon.svg"`，而清单里**没有任何 svg 通配**
+    → 图标没进快照 → 运行时 `realpath()` 找不到 → 每个条目一行红字。
+  · **源码方式运行的开发版没有这个问题**：它读磁盘上的真实文件，不受快照清单影响。
+    v1.5.0（0.1.5 内核）也没有，因为那三个插件与 `icon` 元数据是 0.1.6 / 0.1.7 才有的。
+  · 便携包自带的 5 个插件都没有声明 `icon`，所以它们不受影响。
+
+■ 修法
+
+  内核构建脚本 `scripts/build-exe-for-python-sdk.ts` 的 `ASSET_GLOBS` 一次补齐资产类通配：
+  `svg / png / ico / woff / woff2 / ttf / css`（原始文件合计约 2.7 MB；SEA 里压缩存放，
+  exe 只涨了约 0.2 MB）。这处属于**上游该修**的东西，本地先补上。
+
+■ 随包插件为什么一直不在插件面板里（本版一并修掉）
+
+  · 插件面板的过滤器只列"**在 profile 的 `dependencies` 里**（= 用户装过）"或
+    "部署随附的可选官方包"或"读取出错"的组合包（内核 `ui-plugin-manager`：
+    `pkg.installed || pkg.optional || pkg.error`）。
+  · 便携版启动器此前只把随包插件写进 `dsh.profile.bundles`（决定"要不要加载"），
+    `dependencies` 一直留空 —— 于是插件**正常工作、侧栏入口也在**，却从面板里消失，
+    也没法在那里启停或打开它们的配置页。开发版没有这个问题，因为它的 profile
+    依赖里本来就有那几个 `link:` 条目。
+  · 修法：启动器在同步 `bundles` 的同时**同步 `dependencies`**（写包清单里的版本号），
+    摘除规则与 `bundles` 完全一致（只碰本启动器管着的东西，用户自己装的绝不碰）。
+    离线测试补了对应断言（首启写上、删插件摘掉、清空摘掉、记账丢失也能靠 junction
+    形态摘掉、用户自己的包绝不写进去），并顺手把那句写死的"正好 4 条"改成
+    **从 `插件\` 现算**（v1.4.0 加了皮肤插件后它就是过时断言了）。
+
+■ 两个通用插件的宿主半边在便携版里 failed to import（本版一并修掉）
+
+  · 症状：启动日志 `3 entries did not activate`，其中 `persona-switcher` 与
+    `external-ui-skin` 两行写着 `failed to import`（第三行是官方的 office-to-pdf，见"已知问题"）。
+    插件面板里那两行显示「**未运行**」，皮肤也不生效 —— 但客户端半边照常加载，所以
+    "看起来装了、其实没跑"，很难发现。
+  · 原因：这两个插件的宿主半边 import 了一个便携版运行时**没有的包名**：
+      - `dsh-persona-switcher` import 的是 registry 上的**裸名 `schemastery`**，
+        而内核提供的是 **`@deepseek-ai/schemastery`**（vendor 的那份）；
+      - `dsh-ui-skin` import 的虽是作用域名，却**没把它声明成 peer** ——
+        便携版里外部插件只按"自己声明的 peer"从运行时取依赖，没声明就取不到。
+    开发版不暴露这个问题：那里的 workspace 两种名字都在。
+  · 修法（插件侧）：两个插件统一改用并声明 **`@deepseek-ai/schemastery`**
+    （源码 import、`peerDependencies`、构建脚本里的链接名一起改），重新构建后同步进包。
+    实测验证：失败列表从 3 条降到 1 条（只剩 office-to-pdf），启动日志里出现
+    `[ui-skin] 素材目录：…`（宿主半边跑起来了），`body` 上出现
+    `data-dsh-ui-skin="deepseek"`（皮肤真的生效了），控制台 0 错误。
+  · ⚠️ **给以后加插件的规则**：便携版里外部插件的 import 必须用**内核的 `@deepseek-ai/*` 名字**，
+    并把这些包写进自己的 `peerDependencies`；用 registry 裸名会在便携版里静默变成「未运行」。
+  · 附带发现（未修，属于插件仓库自身）：`dsh-ui-skin/scripts/smoke-client.mjs` 还是按 0.1.5
+    的 `settingsScope` API 写的（现在 24 项失败），需要按 `configForms` 更新。
+
+■ 组成（本版**重建了 exe**，哈希与 v2.0.0 不同；其余文件与 v2.0.0 相同）
+
+  程序\deepseek-harness.exe           279.6 MB   **已重建**
+  程序\deepseek-harness-rg.exe          5.2 MB   未换
+  启动 DSH Web.cmd / 诊断.ps1 / 使用说明.txt       未换
+  start-dsh-web.ps1                               **已更新**（把随包插件登记为 profile 依赖；
+                                                            浏览器改由启动器自己打开）
+  插件\@dsh-external\dsh-novel-script\            未换
+  插件\@dsh-external\dsh-prompt-compare\         未换
+  插件\@dsh-external\dsh-persona-switcher\        **已更新**（schemastery 改用内核作用域名）
+  插件\@dsh-external\dsh-ui-skin\                 **已更新**（补 schemastery peer 声明）
+  插件\dsh-whale-widget\                          未换
+  notices\                                        未换
+  版本更新记录.txt                                本文件
+
+  整包 zip：DSH-Web.zip   约 88 MB
+
+■ 已知问题与边界
+
+  · 官方的 `office-to-pdf`（`@deepseek-ai/dsh-office-to-pdf`）在便携版里**仍是 failed to import**
+    ✗ —— 它需要内核构建产出的两个运行时资源目录（`…-office` LibreOffice ≈192 MB 与
+    `win-x64` Python/Node 载体 ≈270 MB），本包**故意不随包分发**（v1.5.0 也没有，否则下载会
+    从 88 MB 变成 550 MB 上下）。需要这条链路时，把这两个目录放到 `程序\` 旁边即可。
+  · 面板里每个已安装插件的「卸载」按钮会去调 pnpm，而便携版没有 pnpm → 预期是**失败并给提示**
+    （不会破坏已装插件）；真要卸某个随包插件，把 `插件\` 里对应文件夹删掉重启即可。
+  · `dsh-ui-skin` 自带的 `scripts/smoke-client.mjs` 仍按 0.1.5 的 `settingsScope` API 断言
+    （24 项失败），待按 `configForms` 更新 —— 与便携包无关，是插件仓库自身的待办。
+
+■ 核对信息
+
+  主程序 SHA256（**本版重建**）：
+    __SHA256:程序/deepseek-harness.exe__
+  启动器 start-dsh-web.ps1 SHA256（未变）：
+    __SHA256:start-dsh-web.ps1__
+  使用说明.txt SHA256（未变）：
+    __SHA256:使用说明.txt__
+
+
+========================================
+【v2.0.0】2026-09-28  ·  内置内核换代：0.1.5-rc.2 → 0.1.7-rc.2（重建 exe）
 ========================================
 
 ■ 一句话

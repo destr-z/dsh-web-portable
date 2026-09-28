@@ -225,7 +225,7 @@ agent 拆成"每集一份"后自检行数。程序只认固定目录 + 固定文
 ## 9. 构建与安装
 
 ```powershell
-cd D:\001\ai\deepseek\dsh-plugins\dsh-prompt-compare
+cd <插件目录>          # 例如仓库里的 dsh-plugins\dsh-prompt-compare
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 

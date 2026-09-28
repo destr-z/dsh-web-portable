@@ -41,17 +41,39 @@ agent" —— 因为逐集逐块人肉核对"这一版和上一版哪儿不一�
 
 ## 下载与校验
 
-最新版：**[v2.0.0](https://github.com/destr-z/dsh-web-portable/releases/tag/v2.0.0)**
-→ [`DSH-Web-v2.0.0.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v2.0.0/DSH-Web-v2.0.0.zip)（87.8 MB）
+最新版：**[v2.0.1](https://github.com/destr-z/dsh-web-portable/releases/tag/v2.0.1)**
+→ [`DSH-Web-v2.0.1.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v2.0.1/DSH-Web-v2.0.1.zip)（88.0 MB）
 
 ```
-DSH-Web-v2.0.0.zip            SHA256  D9834D5961502E31D9AB49D9DE12D812E7603E91BC504DC9CDDAABE553A5BDD1
-程序\deepseek-harness.exe     SHA256  DC677D392CA847F4E1D980D173D0FBE0362B841738A33FDCADE855A5AF522420
+DSH-Web-v2.0.1.zip            SHA256  78C09DC2EA60D1E3E0888480B17DFB057C794436A11D729C5E2030072B184277
+程序\deepseek-harness.exe     SHA256  DAF37BE8CBAC3B89C6508C6457852313934EE7F418D72FEF8B689ECCAA1D6803
 ```
 
-> **v2.0.0 换的是内置内核**：0.1.5-rc.2 → 0.1.7-rc.2（跨两个 rc）。第一次启动会把老数据
+> **v2.0.x 换的是内置内核**：0.1.5-rc.2 → 0.1.7-rc.2（跨两个 rc）。第一次启动会把老数据
 > 往上迁移（会话格式 v4），**升级前建议先复制一份数据目录**（`%LOCALAPPDATA%\DSH-Web`）。
 > 同一批换上来的还有两个通用插件（人设切换 / 皮肤），它们要跟着新内核的表单服务走。
+>
+> **v2.0.1 修的是打包层的四处缺陷**：
+> ① 内核里三个实验性插件（智能体团队 / 自动授权审查 / 语音输入）的 `icon.svg` 没被烤进
+> 单文件 exe，插件页因此各显示一行「元信息错误」红字（只影响显示，不影响启用）；
+> ② 随包的 5 个插件此前**不出现在插件面板里** —— 启动器只把它们登记成"参与装配的层"
+> （`bundles`），没登记成 profile 的依赖，而面板按依赖判定"装过没有"；
+> ③ 「人设切换」「皮肤」两个插件的**宿主半边在便携版里根本没激活**（`failed to import`，
+> 面板显示「未运行」、皮肤不生效）—— 它们 import 的是 registry 裸名 `schemastery` /
+> 没把 `@deepseek-ai/schemastery` 声明成 peer，而便携版只按"声明的 peer + 内核的名字"提供依赖；
+> ④ 打开后**不再自动弹出网页** —— 单文件 exe 里"打开默认浏览器"会静默失败（连失败信息都不打），
+> 启动器原来的兜底又只在读到那句话时才动手；现在改由启动器自己打开（给 exe 传 `--no-open`）。
+> 现在：红字消失、5 个插件出现在「**已安装**」组里、两个通用插件正常激活
+> （`body` 上会出现 `data-dsh-ui-skin`，皮肤真的生效）、打开即自动弹出界面。
+
+> ⚠️ **给要往 `插件\` 里加插件的人**：在便携版里，外部插件的 import 必须用**内核的
+> `@deepseek-ai/*` 名字**，并把这些包写进自己的 `peerDependencies`。用 registry 上的裸名
+> 会静默失败成「未运行」——日志只有一句 `failed to import`、不带原因，客户端半边却照常加载，
+> 很难查。
+
+> 已知边界：官方的 `office-to-pdf` 在便携版里仍是 `failed to import` —— 它需要内核构建产出的
+> LibreOffice / Python 两个运行时资源目录（合计约 460 MB），本包故意不随包分发；
+> 需要这条链路时把这两个目录放到 `程序\` 旁边即可。
 
 解压后自己核对一次：
 
@@ -60,8 +82,8 @@ DSH-Web-v2.0.0.zip            SHA256  D9834D5961502E31D9AB49D9DE12D812E7603E91BC
 ```
 
 包内 `版本更新记录.txt` 里逐个文件都记了 SHA256，可对照。exe 哈希**在 v1.3.0 – v1.5.0 之间一直没变**
-（那几版只换随包的启动器/说明/插件，没重建 exe）；**v2.0.0 重建了 exe**（换内核），
-所以该值与之前各版都不同 —— 以本节和包内记录为准。
+（那几版只换随包的启动器/说明/插件，没重建 exe）；**v2.0.0 换内核时重建过、v2.0.1 修图标时又重建过**，
+所以现在的值与那几版都不同 —— 以本节和包内记录为准。
 
 ## 怎么用
 

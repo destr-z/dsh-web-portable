@@ -51,6 +51,14 @@ for ($i = 0; $i -lt $argList.Count; $i++) {
 if ("$port" -notmatch '^\d+$') { $port = $defaultPort; $portGiven = $false }
 $port = [int]$port
 if (-not $portGiven) { $effectiveArgs = @('--port', "$port") } else { $effectiveArgs = @() }
+
+# 浏览器统一由**启动器**打开，不让 exe 自己试。
+# 为什么：单文件 exe 里"打开默认浏览器"这条路不可靠 —— 实测 0.1.7 会**静默失败**
+# （连 "could not open the default browser" 都不打），于是既没有浏览器窗口、原来的
+# 兜底分支也不触发。所以固定给 exe 传 --no-open，启动器拿到带 token 的地址后自己
+# Start-Process；用户显式传了 --no-open 时尊重他的选择（不打开）。
+$userNoOpen = $argList -contains '--no-open'
+if (-not $userNoOpen) { $effectiveArgs += '--no-open' }
 # --port 0 = 让系统随机挑端口，此时地址无法预知，交给 dsh 自己处理
 $unknownPort = ($port -eq 0)
 $url = if ($unknownPort) { $null } else { "http://127.0.0.1:$port/" }
@@ -298,8 +306,11 @@ try {
 # 设计：便携包内的 插件\ 目录是唯一真相源，随包一起分发/升级；启动时把它同步进
 # profile 的 node_modules，并把插件包名登记进 profile 清单的 bundles 列表。
 #
-# 为什么只要这两步就够（等价于官方 `dsh plugin add` 的收尾动作）：
+# 为什么这几步就够（等价于官方 `dsh plugin add` 的收尾动作）：
 #   · bundles 列表决定哪些包参与 profile 装配；
+#   · dependencies 列表是**插件面板「已安装」分组的依据** —— 面板按"profile 自己的依赖"
+#     判定装过没有，只写 bundles 的插件会正常加载、却不出现在面板里（也就不能在那里
+#     启停或打开它的配置页）；
 #   · 插件包自带的 cordis.patch.yml 由 loader 自己读，挂哪一行是插件自己声明的，
 #     启动器不需要理解任何插件的内部结构；
 #   · 浏览器半边由客户端模块系统按包扫描 dsh.client 声明发现，也不需要额外登记。
@@ -434,6 +445,85 @@ function Get-ManagedPluginRecords {
   return @($data.plugins | Where-Object { $_ -is [string] -and $_ -ne '' })
 }
 
+# 读一个清单文本里的 dependencies 名字（按文件里的顺序）
+function Get-ListedDependencies {
+  param([string]$Raw)
+  $m = [regex]::Match($Raw, '"dependencies"\s*:\s*\{(?<body>[^}]*)\}')
+  if (-not $m.Success) { return , @() }
+  return , @([regex]::Matches($m.Groups['body'].Value, '"([^"]+)"\s*:') | ForEach-Object { $_.Groups[1].Value })
+}
+
+# 把 profile 清单的 dependencies 同步成"现有条目去掉 $DropNames 再补上 $AddEntries"。
+#
+# 为什么除了 bundles 还要写这里：bundles 只决定"哪些包参与 profile 装配"；而插件面板
+# 把"profile 自己的依赖"当成"用户装过"的唯一依据（宿主 listBundles 里
+# `installed = 名字在 dependencies 里`，客户端再把既非 installed、又非 optional、
+# 也没出错的条目整条过滤掉）。只写 bundles 的话，随包插件会**正常加载、却不出现在
+# 插件面板里**，也就没法在那里启停或打开它们的配置页 —— 2026-09-28 主人报的就是这个。
+# 把两边一起写，profile 的形态就与开发版（那里是 link: 依赖）一致。
+#
+# 与 Sync-Bundles 同样的纪律：无变化一个字节都不写、只重写这一段、写完先解析校验。
+function Sync-Dependencies {
+  param([string]$ManifestPath, [string]$Raw, [string[]]$DropNames, [hashtable]$AddEntries)
+  $m = [regex]::Match($Raw, '(?<head>"dependencies"\s*:\s*\{)(?<body>[^}]*)(?<tail>\})')
+  if (-not $m.Success) {
+    # 清单里没有 dependencies 段：启动器自己写的模板有，但用户手改过、或上游换了形态时
+    # 可能没有。这时**只做新增** —— 在第一个 "{" 之后插一段出来，其它字节一个不动。
+    if ($AddEntries.Count -eq 0) { return $false }
+    $open = $Raw.IndexOf('{')
+    if ($open -lt 0) { return $false }
+    $lines = @()
+    foreach ($name in ($AddEntries.Keys | Sort-Object)) {
+      $lines += ('  "' + $name + '": "' + [string]$AddEntries[$name] + '",')
+    }
+    $insert = "`r`n  `"dependencies`": {`r`n" + ($lines -join "`r`n") + "`r`n  },"
+    $updated = $Raw.Substring(0, $open + 1) + $insert + $Raw.Substring($open + 1)
+    try { $null = $updated | ConvertFrom-Json } catch { return $false }
+    [System.IO.File]::WriteAllText($ManifestPath, $updated, (New-Object System.Text.UTF8Encoding($false)))
+    return $true
+  }
+
+  # 沿用文件里 dependencies 那一行的缩进
+  $indent = '  '
+  $lineStart = $Raw.LastIndexOf("`n", $m.Index)
+  if ($lineStart -ge 0) {
+    $prefix = $Raw.Substring($lineStart + 1, $m.Index - ($lineStart + 1))
+    if ($prefix.Trim() -eq '') { $indent = $prefix }
+  }
+
+  $pairs = @()
+  foreach ($hit in [regex]::Matches($m.Groups['body'].Value, '"([^"]+)"\s*:\s*"([^"]*)"')) {
+    $pairs += , @($hit.Groups[1].Value, $hit.Groups[2].Value)
+  }
+  $kept = @()
+  foreach ($pair in $pairs) {
+    if ($DropNames -notcontains $pair[0]) { $kept += , $pair }
+  }
+  $keptNames = @($kept | ForEach-Object { $_[0] })
+  foreach ($name in ($AddEntries.Keys | Sort-Object)) {
+    if ($keptNames -notcontains $name) { $kept += , @($name, [string]$AddEntries[$name]) }
+  }
+
+  $before = (($pairs | ForEach-Object { $_[0] + '=' + $_[1] }) -join "`n")
+  $after = (($kept | ForEach-Object { $_[0] + '=' + $_[1] }) -join "`n")
+  if ($before -ceq $after) { return $false }
+
+  $itemIndent = $indent + '  '
+  $body = ''
+  if ($kept.Count -gt 0) {
+    $lines = @()
+    for ($i = 0; $i -lt $kept.Count; $i++) {
+      $comma = if ($i -lt $kept.Count - 1) { ',' } else { '' }
+      $lines += ($itemIndent + '"' + $kept[$i][0] + '": "' + $kept[$i][1] + '"' + $comma)
+    }
+    $body = "`r`n" + ($lines -join "`r`n") + "`r`n" + $indent
+  }
+  $updated = $Raw.Substring(0, $m.Index) + $m.Groups['head'].Value + $body + '}' + $Raw.Substring($m.Index + $m.Length)
+  try { $null = $updated | ConvertFrom-Json } catch { return $false }
+  [System.IO.File]::WriteAllText($ManifestPath, $updated, (New-Object System.Text.UTF8Encoding($false)))
+  return $true
+}
+
 # 写记账文件。刻意不做成"失败就报错"：记账写不进去只是下次少一条清理依据，
 # 不该拦住启动，也不该在用户界面上刷红字。
 function Save-ManagedPluginRecords {
@@ -451,8 +541,9 @@ try {
   $profileManifest = Join-Path $profileDir 'package.json'
   # 本启动器以前装过、现在还在管着的包名（清理逻辑的唯一"所有权"依据）
   $recorded = Get-ManagedPluginRecords $recordsPath
-  # A) 读取 插件\ 下每个插件的包名与来源目录；只接受声明了 dsh.bundle.patch 的
+  # A) 读取 插件\ 下每个插件的包名、版本与来源目录；只接受声明了 dsh.bundle.patch 的
   $pluginSources = @{}
+  $pluginVersions = @{}
   if (Test-Path -LiteralPath $pluginsRoot) {
     foreach ($scopeDir in (Get-ChildItem -LiteralPath $pluginsRoot -Directory -Force -ErrorAction SilentlyContinue)) {
       $candidates = @()
@@ -472,6 +563,9 @@ try {
           continue
         }
         $pluginSources[[string]$manifest.name] = $candidate.FullName
+        # 版本也要留下：它会被写进 profile 清单的 dependencies（给清单一个具体值，
+        # 而不是看不出装了哪一版的 "*"）。包清单缺 version 时退回 "*"。
+        $pluginVersions[[string]$manifest.name] = if ($manifest.version) { [string]$manifest.version } else { '*' }
       }
     }
   }
@@ -597,6 +691,28 @@ try {
         Write-Host '  警告：profile 清单未能更新，插件可能不生效。' -ForegroundColor Yellow
       }
     }
+
+    # C2) 同步 profile 清单的 dependencies —— 插件面板「已安装」分组的依据。
+    #     宿主 listBundles 里 `installed = 名字在 dependencies 里`，而客户端会把
+    #     既非 installed、又非 optional、也没报错的条目整条过滤掉；只写 bundles 的话，
+    #     随包插件会**正常加载、却不出现在插件面板里**（2026-09-28 主人报的问题）。
+    #     摘除规则与 bundles 完全一致：只碰本启动器管着的东西，用户自己装的绝不碰。
+    $rawManifest = [System.IO.File]::ReadAllText($profileManifest, (New-Object System.Text.UTF8Encoding($false)))
+    $listedDeps = Get-ListedDependencies $rawManifest
+    $depDrop = @()
+    foreach ($name in $listedDeps) {
+      if ($pluginSources.ContainsKey($name)) { continue }
+      if ($recorded -contains $name) { $depDrop += $name; continue }
+      if ($staleNames -contains $name) { $depDrop += $name; continue }
+      if ($name -like '@dsh-external/*') {
+        if (-not (Test-Path -LiteralPath (Get-PluginLinkPath $name))) { $depDrop += $name }
+      }
+    }
+    $depAdd = @{}
+    foreach ($name in $pluginSources.Keys) { $depAdd[$name] = $pluginVersions[$name] }
+    if (Sync-Dependencies -ManifestPath $profileManifest -Raw $rawManifest -DropNames $depDrop -AddEntries $depAdd) {
+      Write-Host "  已把 $($pluginSources.Count) 个随包插件登记为 profile 依赖（插件面板「已安装」组据此列出）。"
+    }
   }
 
   # D) 更新记账：记下"本启动器现在管着哪些包"。放在最后一步 —— 只有前面的安装/
@@ -644,7 +760,11 @@ try {
     Get-Content -LiteralPath $path -Wait -Encoding UTF8 -ErrorAction SilentlyContinue
   }
 
-  Write-Host '  浏览器会自动打开；关闭本窗口即停止服务。'
+  if ($userNoOpen) {
+    Write-Host '  浏览器不会自动打开（你传了 --no-open）；地址在下面。'
+  } else {
+    Write-Host '  浏览器会自动打开；关闭本窗口即停止服务。'
+  }
   Write-Host ''
 
   # 阶段 1：等就绪行（或等它失败退出）。拿到地址就不再干等 —— 服务要一直跑到用户关窗口。
@@ -665,16 +785,12 @@ try {
     Start-Sleep -Milliseconds 300
   }
 
-  # 阶段 2：拿到地址就立刻摆到用户面前 —— 不依赖"浏览器有没有自动打开"。
+  # 阶段 2：拿到地址就立刻摆到用户面前 —— 浏览器由**这里**打开（见上面 --no-open 的说明）
   if ($urlLine) {
-    $bootLog = ''
-    foreach ($f in @($logFile, "$logFile.err")) {
-      if (Test-Path -LiteralPath $f) { $bootLog += (Get-Content -LiteralPath $f -Raw -ErrorAction SilentlyContinue) }
-    }
-    if ($bootLog -match 'could not open the default browser') {
-      Write-Host ''
-      Write-Host '  自动打开浏览器失败（被系统拦截），改为手动打开。' -ForegroundColor Yellow
-      try { Start-Process $urlLine } catch { }
+    if (-not $userNoOpen) {
+      try { Start-Process $urlLine } catch {
+        Write-Host '  自动打开浏览器失败，请手动复制下面的地址。' -ForegroundColor Yellow
+      }
     }
     Write-Host ''
     Write-Host '  ────────────────────────────────────────────────────────────' -ForegroundColor DarkCyan

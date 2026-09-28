@@ -24,7 +24,7 @@
     "@deepseek-ai/dsh-llm": "0.1.x",
     "@deepseek-ai/dsh-tools": "0.1.x",
     "cordis": ">=4.0.0-rc <5",
-    "schemastery": "^3.18.0",
+    "@deepseek-ai/schemastery": "^3.18.0",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.x"
   },
   "devDependencies": {

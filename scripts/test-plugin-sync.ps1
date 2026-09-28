@@ -83,7 +83,8 @@ try {
   $manifestPath = Join-Path $profileDir 'package.json'
   function Write-Manifest($names) {
     $body = ($names | ForEach-Object { '      "' + $_ + '"' }) -join ",`r`n"
-    $json = "{`r`n  `"name`": `"dsh-profile-web`",`r`n  `"version`": `"0.0.0`",`r`n  `"dsh`": {`r`n    `"profile`": {`r`n      `"bundles`": [`r`n$body`r`n      ],`r`n      `"patchReload`": `"live`"`r`n    }`r`n  }`r`n}`r`n"
+    # 形态与启动器自己写的模板一致：dependencies 段必须存在（插件面板「已安装」的依据）。
+    $json = "{`r`n  `"name`": `"dsh-profile-web`",`r`n  `"version`": `"0.0.0`",`r`n  `"dependencies`": {},`r`n  `"dsh`": {`r`n    `"profile`": {`r`n      `"bundles`": [`r`n$body`r`n      ],`r`n      `"patchReload`": `"live`"`r`n    }`r`n  }`r`n}`r`n"
     [System.IO.File]::WriteAllText($manifestPath, $json, (New-Object System.Text.UTF8Encoding($false)))
   }
   function Read-Manifest { [System.IO.File]::ReadAllText($manifestPath, [System.Text.Encoding]::UTF8) }
@@ -100,7 +101,36 @@ try {
     if (-not $j.plugins) { return @() }
     return @($j.plugins)
   }
+  # profile 清单里 dependencies 的名字：插件面板「已安装」分组就按这个判定装过没有。
+  function Get-Dependencies {
+    $p = Join-Path $profileDir 'package.json'
+    if (-not (Test-Path -LiteralPath $p)) { return @() }
+    $raw = [System.IO.File]::ReadAllText($p, (New-Object System.Text.UTF8Encoding($false)))
+    $m = [regex]::Match($raw, '"dependencies"\s*:\s*\{(?<body>[^}]*)\}')
+    if (-not $m.Success) { return @() }
+    return @([regex]::Matches($m.Groups['body'].Value, '"([^"]+)"\s*:') | ForEach-Object { $_.Groups[1].Value })
+  }
   $script:lastOutput = ''
+  # 沙箱里到底有几个随包插件：从源目录**现算**，别写死数量 ——
+  # v1.4.0 加了皮肤插件之后，"正好 4 条"这类断言就成了过时的假失败。
+  function Get-ExpectedPlugins {
+    $out = @()
+    foreach ($scopeDir in (Get-ChildItem -LiteralPath $srcPlugins -Directory -Force -ErrorAction SilentlyContinue)) {
+      $candidates = if ($scopeDir.Name -like '@*') {
+        @(Get-ChildItem -LiteralPath $scopeDir.FullName -Directory -Force -ErrorAction SilentlyContinue)
+      } else { @($scopeDir) }
+      foreach ($c in $candidates) {
+        # 必须显式按 UTF-8 读：PS 5.1 的 Get-Content 会把**没有 BOM** 的 UTF-8 按
+        # ANSI(GBK) 解码，中文变乱码、JSON 解析失败（正是仓库 README 里那条禁令）。
+        try {
+          $rawJson = [System.IO.File]::ReadAllText((Join-Path $c.FullName 'package.json'), (New-Object System.Text.UTF8Encoding($false)))
+          $j = $rawJson | ConvertFrom-Json
+        } catch { continue }
+        if ($j.name -and $j.dsh -and $j.dsh.bundle -and $j.dsh.bundle.patch) { $out += [string]$j.name }
+      }
+    }
+    return $out
+  }
   function Invoke-Launcher {
     # 启动器最后会 Read-Host 等回车；喂一个空行让它走完
     $script:lastOutput = ('' | & powershell -NoProfile -ExecutionPolicy Bypass -File $launcher 2>&1 | Out-String)
@@ -114,20 +144,24 @@ try {
   }
 
   # ---------- 场景 1：首次启动 ----------
-  Section '1) 首次启动：装齐 4 个插件'
+  Section '1) 首次启动：装齐包内自带的插件'
   Write-Manifest @($userPkgName)
   $null = Invoke-Launcher
   $bundles = Get-Bundles
   $records = Get-Records
-  foreach ($n in @('@dsh-external/dsh-novel-script', '@dsh-external/dsh-persona-switcher', '@dsh-external/dsh-prompt-compare', 'dsh-whale-widget')) {
+  $deps = Get-Dependencies
+  $expected = Get-ExpectedPlugins
+  foreach ($n in $expected) {
     Check ($bundles -contains $n) "bundles 里有 $n"
     Check ($records -contains $n) "记账文件里有 $n"
+    Check ($deps -contains $n) "dependencies 里有 $n（插件面板「已安装」的依据）"
   }
   Check ((Test-Path -LiteralPath (Join-Path $nodeModules 'dsh-whale-widget\package.json'))) 'dsh-whale-widget 已挂到 node_modules 顶层'
   Check ((Test-Path -LiteralPath (Join-Path $nodeModules '@dsh-external\dsh-novel-script\package.json'))) 'dsh-novel-script 已挂到 @dsh-external\'
-  Check ($records.Count -eq 4) "记账文件正好 4 条（实际 $($records.Count)）"
+  Check ($records.Count -eq $expected.Count) "记账文件正好 $($expected.Count) 条（实际 $($records.Count)）"
   Check ($bundles -contains $userPkgName) '用户自己的包仍留在 bundles 里'
   Check ((Test-Path -LiteralPath (Join-Path $userPkgDir 'package.json'))) '用户自己的包目录还在'
+  Check (-not ($deps -contains $userPkgName)) '用户自己的包没有被写进 dependencies（不认领别人的包）'
 
   # ---------- 场景 2：从 插件\ 删掉一个 ----------
   Section '2) 从 插件\ 删掉 prompt-compare：它该被清干净'
@@ -137,6 +171,9 @@ try {
   $records = Get-Records
   Check ($bundles -notcontains '@dsh-external/dsh-prompt-compare') 'bundles 里的条目被摘掉'
   Check ($records -notcontains '@dsh-external/dsh-prompt-compare') '记账文件里的名字被摘掉'
+  $deps2 = Get-Dependencies
+  Check ($deps2 -notcontains '@dsh-external/dsh-prompt-compare') 'dependencies 里的条目也被摘掉'
+  Check ($deps2 -contains '@dsh-external/dsh-novel-script') '其余插件的 dependencies 条目还在'
   Check (-not (Test-Path -LiteralPath (Join-Path $nodeModules '@dsh-external\dsh-prompt-compare'))) 'node_modules 里的条目被摘掉'
   Check ((Test-Path -LiteralPath (Join-Path $pkg '插件\@dsh-external\dsh-novel-script\package.json'))) '没被删的插件源目录完好（junction 没有反噬源）'
   Check ((Test-Path -LiteralPath (Join-Path $nodeModules '@dsh-external\dsh-novel-script\package.json'))) '其余插件仍在'
@@ -154,10 +191,13 @@ try {
   $null = Invoke-Launcher
   $bundles = Get-Bundles
   $records = Get-Records
-  foreach ($n in @('@dsh-external/dsh-novel-script', '@dsh-external/dsh-persona-switcher', 'dsh-whale-widget')) {
+  $deps4 = Get-Dependencies
+  foreach ($n in ($expected | Where-Object { $_ -ne '@dsh-external/dsh-prompt-compare' })) {
     Check ($bundles -notcontains $n) "bundles 里没有 $n"
+    Check ($deps4 -notcontains $n) "dependencies 里没有 $n"
   }
   Check ($records.Count -eq 0) "记账文件清空（实际 $($records.Count) 条）"
+  Check (-not ($deps4 -contains $userPkgName)) '用户自己的包没被写进 dependencies'
   Check ($bundles -contains $userPkgName) '用户自己的包仍在 bundles 里'
   Check ((Test-Path -LiteralPath (Join-Path $userPkgDir 'package.json'))) '用户自己的包目录仍在'
   Check (-not (Test-Path -LiteralPath (Join-Path $nodeModules '@dsh-external\dsh-novel-script'))) '随包插件的 node_modules 条目已清'
@@ -173,6 +213,7 @@ try {
   $null = Invoke-Launcher
   $bundles = Get-Bundles
   Check ($bundles -notcontains '@dsh-external/dsh-novel-script') '靠 junction 形态仍认领并摘掉了条目'
+  Check ((Get-Dependencies) -notcontains '@dsh-external/dsh-novel-script') 'dependencies 条目也靠 junction 形态摘掉了'
   Check (-not (Test-Path -LiteralPath (Join-Path $nodeModules '@dsh-external\dsh-novel-script'))) 'node_modules 条目也摘掉了'
   Check ($bundles -contains $userPkgName) '用户自己的包依然没被碰'
   Check ((Test-Path -LiteralPath (Join-Path $data 'managed-plugins.json'))) '记账文件已重建'

@@ -11,9 +11,14 @@
  * 的 persona 行更贴近会话，因此必然遮蔽预设与全局人设。文本动态读取：
  * 设置变更后无需重注册，下一次模型请求即生效。
  *
- * 依赖：只 import 裸名 `schemastery`（构建时由 scripts/build.sh 链到
- * $DSH_CHECKOUT/vendor/schemastery，装载时模块解析路径可预期），不 import
- * 任何 @deepseek-ai 包——与 dsh-mode-boost 同样的理由。
+ * 依赖：只 import `@deepseek-ai/schemastery`（内核 vendor 的那份），构建时由
+ * scripts/build.sh 链到 $DSH_CHECKOUT/vendor/schemastery。
+ *
+ * ⚠️ 必须用**内核的作用域名**，别用 registry 上的裸名 `schemastery`：便携版
+ * （单文件 exe）里外部插件只按"自己声明的 peer"从运行时取依赖，而运行时提供的是
+ * `@deepseek-ai/schemastery` —— 裸名解析不到。症状很隐蔽：宿主半边
+ * `failed to import`（内核只报这一句、不带原因），插件面板里那一行显示「未运行」，
+ * 客户端半边却照常加载。2026-09-28 实测踩到。
  *
  * 0.1.7 起设置改为**声明式**：导出 `Config`（schemastery），可编辑字段用
  * `.volatile()` 标记；设置服务按 profile 条目 id 自动成表，写入持久化到
@@ -21,7 +26,7 @@
  * 旧的 `settings.register(ns, schema, { applies: 'live' })` 与 scope 的
  * `get()` / `watch()` 在 0.1.7 均已不存在。
  */
-import z from 'schemastery';
+import z from '@deepseek-ai/schemastery';
 /** 一个会话的人设快照。 */
 interface PersonaEntry {
     /** 来源模板 id（快照自旧数据时可缺省）。 */

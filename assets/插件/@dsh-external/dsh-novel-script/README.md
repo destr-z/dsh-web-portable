@@ -76,7 +76,7 @@
 ## 构建
 
 ```powershell
-cd D:\001\ai\deepseek\dsh-plugins\dsh-novel-script
+cd <插件目录>          # 例如仓库里的 dsh-plugins\dsh-novel-script
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
