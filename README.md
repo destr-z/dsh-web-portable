@@ -41,17 +41,27 @@ agent" —— 因为逐集逐块人肉核对"这一版和上一版哪儿不一�
 
 ## 下载与校验
 
-最新版：**[v2.0.1](https://github.com/destr-z/dsh-web-portable/releases/tag/v2.0.1)**
-→ [`DSH-Web-v2.0.1.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v2.0.1/DSH-Web-v2.0.1.zip)（88.0 MB）
+最新版：**[v2.0.2](https://github.com/destr-z/dsh-web-portable/releases/tag/v2.0.2)**
+→ [`DSH-Web-v2.0.2.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v2.0.2/DSH-Web-v2.0.2.zip)（88.0 MB）
 
 ```
-DSH-Web-v2.0.1.zip            SHA256  78C09DC2EA60D1E3E0888480B17DFB057C794436A11D729C5E2030072B184277
-程序\deepseek-harness.exe     SHA256  DAF37BE8CBAC3B89C6508C6457852313934EE7F418D72FEF8B689ECCAA1D6803
+DSH-Web-v2.0.2.zip            SHA256  3CC7E449C760A98AFAE7408BD7F240459A2D5FE1290CE2A7D230B29864B873E2
+程序\deepseek-harness.exe     SHA256  BE46218EB287F0855747BD827BF643AD584FA789DD411E2B1341E031C491C358
 ```
 
 > **v2.0.x 换的是内置内核**：0.1.5-rc.2 → 0.1.7-rc.2（跨两个 rc）。第一次启动会把老数据
 > 往上迁移（会话格式 v4），**升级前建议先复制一份数据目录**（`%LOCALAPPDATA%\DSH-Web`）。
 > 同一批换上来的还有两个通用插件（人设切换 / 皮肤），它们要跟着新内核的表单服务走。
+>
+> **v2.0.2 修的是两处「会丢东西」的问题**：
+> ① **你在界面里配的模型渠道不再被启动器覆盖** —— 模型渠道（中转站那几条）、默认模型、主题、
+> 各插件配置都存在 profile 的 `cordis.patch.yml` 里，而旧启动器**每次启动都整份重写**它，
+> 配好的渠道下次启动就没了。现在该文件**已存在就只补启动器自己缺的几段、其它一个字节不动**，
+> 补写前还会留一份 `cordis.patch.yml.bak-launcher-<时间戳>`（保留最近 3 份）。
+> ② **打开已有会话不再报 `resume failed`** —— 单文件 exe 里 worker 线程读不到快照路径
+> （`Cannot find module 'C:\snapshot\…\dsh-session-persistence-jsonl\lib\worker.cjs'`）；
+> 现在 worker 起不来就退回**进程内验证**（算法一致，只少了"新 isolate"这层加固）。
+> 旧版已经抹掉的渠道可以从开发版 profile 的 `llm-pi-ai` 段整段拷回来（见包内版本记录 v2.0.2 节）。
 >
 > **v2.0.1 修的是打包层的四处缺陷**：
 > ① 内核里三个实验性插件（智能体团队 / 自动授权审查 / 语音输入）的 `icon.svg` 没被烤进

@@ -200,19 +200,24 @@ $env:DSH_HOME = $dataHome
 # browse —— 纯 Node 实现，无子进程、无原生模块。directory-picker 是单例服务，两个
 # 后端并存会冲突，所以必须先 disable 再 insert。
 #
-# 这份 patch 必须**整份重写**，不能追加：它是一份 YAML 文档，顶层只有一个数组。
-# 若在程序生成的模板（结尾是 `[]`，已结束整个文档）之后再追加一段 `- id: ...`，
-# 文件里就出现两段顶层数组，YAML 解析直接失败：
-#   YAMLException: end of the stream or a document separator is expected
-# 而启动器先写、程序后生成模板的顺序（全新设备就是这种）正好会踩到。整份重写
-# 既消除了这个风险，也让重复启动天然幂等。
+# 这份 patch 的写法规矩（改过一次，务必看清）：
+#   · **全新 profile**（文件不存在，或里面只是程序生成的空模板 `[]`）→ 整份写入下面的模板。
+#     必须整份写的原因：空模板结尾的 `[]` 已经结束了整个 YAML 文档，在它后面追加
+#     `- id: ...` 会出现两段顶层数组，解析直接失败：
+#       YAMLException: end of the stream or a document separator is expected
+#   · **已有内容的 profile** → **只补自己缺的那几段，其它字节一个都不动**。
+#     为什么不能整份重写：0.1.7 起**设置服务也往这个文件里写东西**（模型渠道 llm-pi-ai、
+#     默认模型 agent-default-model、主题 ui-theme、各插件的 config…）。整份重写会把用户
+#     在界面里配好的中转站模型**直接抹掉** —— 2026-09-28 实测踩到：更新后便携版数据目录里
+#     连一丝痕迹都不剩。补写之前先备份 `cordis.patch.yml.bak-launcher-<时间戳>`（留最近 3 份）。
 $profileDir   = Join-Path $dataHome 'profiles\web'
 $profilePatch = Join-Path $profileDir 'cordis.patch.yml'
 $profilePatchContent = @'
 # dsh profile 补丁层：在全部 bundle 层之后应用。
 # 顶层是一个 YAML 数组，元素为 loader patch 条目（按 id 定向改配置、禁用、插入新行）。
-# 本文件由「启动 DSH Web.cmd / start-dsh-web.ps1」在每次启动时整体重写，请勿手工编辑：
-# 你的改动会在下次启动时被覆盖。
+# 这份文件里既有启动器补的几条（目录选择器 / 树内皮肤），也有 dsh 设置服务写下的
+# 你自己的设置（模型渠道、默认模型、主题、各插件配置）。
+# 启动器只在**全新 profile** 时写入这份模板；已有内容时只补自己缺的那几段，不动别的。
 
 # 单文件 exe 里原生目录对话框不可用，钉死网页版（browse）。
 # 原生后端靠 spawn(process.execPath, [.../worker.cjs]) 起子进程去开 Win32 模态对话框；
@@ -251,17 +256,54 @@ $profilePatchContent += @'
   disabled: true
 '@
 
+# 已有内容时要"只补缺的段"：这三段是启动器必须保证存在的东西。
+# 用正则探测是不是已经有了，避免重复插入（顶层数组里重复的 insert 会报重复行 id）。
+$profileRequiredBlocks = @(
+  @{
+    Probe = '(?m)^-\s*id:\s*directory-picker\s*$'
+    Text  = "- id: directory-picker`r`n  disabled: true"
+  },
+  @{
+    Probe = 'directory-picker-browse-surface'
+    Text  = "- insert:`r`n    - id: directory-picker-browse`r`n      name: '@deepseek-ai/dsh-host-directory-picker-browse'`r`n    - id: directory-picker-browse-surface`r`n      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'"
+  },
+  @{
+    Probe = '(?m)^-\s*id:\s*ui-skin\s*$'
+    Text  = "# 关掉树内那条同名皮肤（原因见启动器注释）：它与随包插件抢同一个设置槽位。`r`n# disable 一个不存在的 id 是无害的，所以这一条对没有树内皮肤的 exe 也安全。`r`n- id: ui-skin`r`n  disabled: true"
+  }
+)
+
 try {
   New-Item -ItemType Directory -Force -Path $profileDir | Out-Null
-  # 内容不同才写，避免每次启动都改文件（不改就不会触发无谓的热加载）
-  $needPatchWrite = $true
-  if (Test-Path -LiteralPath $profilePatch) {
-    $current = [System.IO.File]::ReadAllText($profilePatch, (New-Object System.Text.UTF8Encoding($false)))
-    $needPatchWrite = ($current.Trim() -ne $profilePatchContent.Trim())
-  }
-  if ($needPatchWrite) {
-    [System.IO.File]::WriteAllText($profilePatch, $profilePatchContent, (New-Object System.Text.UTF8Encoding($false)))
-    Write-Host '  已写入 profile 配置（目录选择器改为网页版）。'
+  $patchExists = Test-Path -LiteralPath $profilePatch
+  $patchRaw = if ($patchExists) { [System.IO.File]::ReadAllText($profilePatch, (New-Object System.Text.UTF8Encoding($false))) } else { '' }
+  # 去掉注释与空白后还剩什么：空、或只剩 `[]` = 程序生成的空模板，里面没有用户数据
+  $patchStripped = (($patchRaw -split "`r?`n") | Where-Object { $_.Trim() -ne '' -and $_.Trim() -notlike '#*' }) -join "`n"
+
+  if (-not $patchExists -or $patchStripped -eq '' -or $patchStripped -eq '[]') {
+    # 全新 profile：整份写模板
+    if ($patchRaw.Trim() -ne $profilePatchContent.Trim()) {
+      [System.IO.File]::WriteAllText($profilePatch, $profilePatchContent, (New-Object System.Text.UTF8Encoding($false)))
+      Write-Host '  已写入 profile 配置（目录选择器改为网页版）。'
+    }
+  } else {
+    # 已有内容：只把缺的那几段补在末尾（末尾才生效），其它字节原样保留
+    $append = ''
+    foreach ($block in $profileRequiredBlocks) {
+      if ($patchRaw -notmatch $block.Probe) { $append += "`r`n" + $block.Text + "`r`n" }
+    }
+    if ($append -ne '') {
+      # 这个文件里现在也有用户的设置，写之前先备份（保留最近 3 份）
+      try {
+        $backup = "$profilePatch.bak-launcher-" + (Get-Date).ToString('yyyyMMdd-HHmmss')
+        [System.IO.File]::WriteAllText($backup, $patchRaw, (New-Object System.Text.UTF8Encoding($false)))
+        Get-ChildItem -LiteralPath $profileDir -Filter 'cordis.patch.yml.bak-launcher-*' -File -ErrorAction SilentlyContinue |
+          Sort-Object LastWriteTime -Descending | Select-Object -Skip 3 |
+          ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+      } catch { }
+      [System.IO.File]::WriteAllText($profilePatch, $patchRaw.TrimEnd() + "`r`n" + $append, (New-Object System.Text.UTF8Encoding($false)))
+      Write-Host '  已补齐 profile 配置（目录选择器改为网页版；原有设置保持不动）。'
+    }
   }
 
   # package.json 必须有 version 字段，否则 profile 的 live 热加载会校验失败
