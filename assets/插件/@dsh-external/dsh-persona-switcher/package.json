@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-persona-switcher",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DSH 人设切换器：按会话记忆的人设模板库——设置页管理模板，对话输入框选择即生效（按会话、无需重启）。",
   "publishConfig": {
     "access": "public"
@@ -21,11 +21,11 @@
   ],
   "license": "BSD-3-Clause",
   "peerDependencies": {
-    "@deepseek-ai/dsh-llm": ">=0.0.1-rc <2",
-    "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2",
+    "@deepseek-ai/dsh-llm": "0.1.x",
+    "@deepseek-ai/dsh-tools": "0.1.x",
     "cordis": ">=4.0.0-rc <5",
     "schemastery": "^3.18.0",
-    "@deepseek-ai/dsh-client-ui-slots": ">=0.0.1-rc <2"
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.x"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
@@ -54,7 +54,6 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-settings"
       ],

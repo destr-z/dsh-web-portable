@@ -41,15 +41,9 @@ export const SKIN_ASSET_NAMES = [
     'codex-icon.png',
     'claude-icon.png',
 ];
-/**
- * 设置命名空间（宿主注册 + 客户端读写，两边必须一致）。
- *
- * 这是**唯一真相源**（本文件拥有"素材目录放哪、从哪读"这件事，命名空间是它的一部分）。
- * 刻意不叫 `ui-skin`：那是树内皮肤的命名空间，同一个命名空间被两个宿主插件注册会冲突。
- */
-export const SKIN_SETTINGS_NAMESPACE = 'dsh-ui-skin';
-/** 设置里承载"资产目录"的字段名。 */
-export const ASSETS_DIR_FIELD = 'assetsDir';
+// 设置相关的常量与形状统一在 `skin-settings.ts`（单一真相源）。
+// 本文件只负责"素材目录怎么解析、文件怎么读"，不再持有任何条目 id 或设置字段名
+// —— 曾经这里和 skin-settings.ts 各有一份同名字面量，其中一份过期，出过 bug。
 /**
  * 判断一个请求路径里的文件名是否是受支持的资产。
  * @param name - 请求里的文件名（不含目录）。

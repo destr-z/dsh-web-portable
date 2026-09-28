@@ -12,20 +12,6 @@ export declare const SKIN_ASSET_NAMES: readonly ["deepseek-mascot.png", "codex-i
 /** 一个合法的资产文件名。 */
 export type SkinAssetName = typeof SKIN_ASSET_NAMES[number];
 /**
- * 设置命名空间（宿主注册 + 客户端读写，两边必须一致）。
- *
- * 这是**唯一真相源**（本文件拥有"素材目录放哪、从哪读"这件事，命名空间是它的一部分）。
- * 刻意不叫 `ui-skin`：那是树内皮肤的命名空间，同一个命名空间被两个宿主插件注册会冲突。
- */
-export declare const SKIN_SETTINGS_NAMESPACE = "dsh-ui-skin";
-/** 设置里承载"资产目录"的字段名。 */
-export declare const ASSETS_DIR_FIELD = "assetsDir";
-/** 设置文档形状。两个字段都可选：未设置时各自走默认。 */
-export interface UiSkinSettings {
-    /** 皮肤资产目录（绝对路径）；空 = 用默认目录。 */
-    assetsDir?: string;
-}
-/**
  * 判断一个请求路径里的文件名是否是受支持的资产。
  * @param name - 请求里的文件名（不含目录）。
  * @returns 是否是白名单成员。

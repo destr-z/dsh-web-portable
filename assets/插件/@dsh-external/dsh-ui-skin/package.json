@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-ui-skin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DSH 皮肤插件：在浅色/深色之上叠加一层可选皮肤（DeepSeek 官方蓝 / Codex / Claude Code），含设置页的三卡选择行、body[data-dsh-ui-skin] 标记，以及可自备图片素材的素材目录（默认数据目录下 skins\\，可另设绝对路径）。三张卡各一张图：deepseek-mascot.png / codex-icon.png / claude-icon.png；缺哪张，哪张卡回退内置矢量标记。",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
   "license": "MIT",
   "peerDependencies": {
     "cordis": ">=4.0.0-rc <5",
-    "@deepseek-ai/dsh-client-ui-slots": ">=0.0.1-rc <2"
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.x"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
@@ -43,11 +43,13 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-settings-general",
         "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "external": [
+        "@deepseek-ai/dsh-client-store"
       ],
       "platform": "web"
     }

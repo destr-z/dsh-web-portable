@@ -41,13 +41,17 @@ agent" —— 因为逐集逐块人肉核对"这一版和上一版哪儿不一�
 
 ## 下载与校验
 
-最新版：**[v1.5.0](https://github.com/destr-z/dsh-web-portable/releases/tag/v1.5.0)**
-→ [`DSH-Web-v1.5.0.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v1.5.0/DSH-Web-v1.5.0.zip)（71.3 MB）
+最新版：**[v2.0.0](https://github.com/destr-z/dsh-web-portable/releases/tag/v2.0.0)**
+→ [`DSH-Web-v2.0.0.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v2.0.0/DSH-Web-v2.0.0.zip)（87.8 MB）
 
 ```
-DSH-Web-v1.5.0.zip            SHA256  F1AE2D05859D4B0EC921E3F426762E8F4EA582981F0D924C2694DBB4F39DD960
-程序\deepseek-harness.exe     SHA256  2480903F911FA53C9C7CEC83BF806535A06F77701A5BEF6C7862E8A3313DB67B
+DSH-Web-v2.0.0.zip            SHA256  D9834D5961502E31D9AB49D9DE12D812E7603E91BC504DC9CDDAABE553A5BDD1
+程序\deepseek-harness.exe     SHA256  DC677D392CA847F4E1D980D173D0FBE0362B841738A33FDCADE855A5AF522420
 ```
+
+> **v2.0.0 换的是内置内核**：0.1.5-rc.2 → 0.1.7-rc.2（跨两个 rc）。第一次启动会把老数据
+> 往上迁移（会话格式 v4），**升级前建议先复制一份数据目录**（`%LOCALAPPDATA%\DSH-Web`）。
+> 同一批换上来的还有两个通用插件（人设切换 / 皮肤），它们要跟着新内核的表单服务走。
 
 解压后自己核对一次：
 
@@ -55,9 +59,9 @@ DSH-Web-v1.5.0.zip            SHA256  F1AE2D05859D4B0EC921E3F426762E8F4EA582981F
 (Get-FileHash '程序\deepseek-harness.exe' -Algorithm SHA256).Hash
 ```
 
-包内 `版本更新记录.txt` 里逐个文件都记了 SHA256，可对照。exe 哈希**自 v1.3.0 起一直没变**
-（v1.3.0 / v1.3.1 / v1.4.0 / v1.5.0 这几版都没重建 exe，只换随包的启动器/说明/插件）；
-换到重建过的版本时该值会变，届时以该版记录为准。
+包内 `版本更新记录.txt` 里逐个文件都记了 SHA256，可对照。exe 哈希**在 v1.3.0 – v1.5.0 之间一直没变**
+（那几版只换随包的启动器/说明/插件，没重建 exe）；**v2.0.0 重建了 exe**（换内核），
+所以该值与之前各版都不同 —— 以本节和包内记录为准。
 
 ## 怎么用
 

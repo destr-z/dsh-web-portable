@@ -590,18 +590,17 @@ window.__ModuleLoader__.load({
 		//#region src/client/index.ts
 		/** Settings namespace（必须与 host 端一致）。 */
 		const NS = "persona-switcher";
-		const inject = ["slots", "settingsScope"];
+		const inject = ["slots", "configForms"];
 		function apply(ctx) {
 			console.info("[persona-switcher] client apply: start");
 			try {
-				const scope = ctx.settingsScope.bind({
-					namespace: NS,
-					decode: (value) => value
-				});
-				ctx.slots.inject("settings.plugin.item", function* () {
+				const scope = ctx.configForms.get(NS);
+				ctx.slots.inject("settings.plugins.tab", function* () {
 					yield ctx.slots.register({
-						name: "settings.plugin.item",
-						key: NS,
+						name: "settings.plugins.tab",
+						id: NS,
+						order: 40,
+						label: () => "人设",
 						inject: () => ({ scope })
 					}, PersonaCard);
 				});

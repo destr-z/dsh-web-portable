@@ -6,6 +6,7 @@ window.__ModuleLoader__.load({
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		let react = require("react");
 		let react_jsx_runtime = require("react/jsx-runtime");
+		let _deepseek_ai_dsh_client_store = require("@deepseek-ai/dsh-client-store");
 		//#region src/client/assets.ts
 		/**
 		* 皮肤素材（图片）的客户端侧：URL 组装 + 可用性清单。
@@ -474,37 +475,41 @@ window.__ModuleLoader__.load({
 		//#endregion
 		//#region src/client/store.ts
 		/**
-		* 创建一个 store。
+		* 皮肤设置行的状态容器，以及给组件用的 React 选择器钩子。
+		*
+		* ## 引擎用官方的 `@deepseek-ai/dsh-client-store`
+		*
+		* 0.1.5 时代这个包**不在装载器的基线模块表里**：用它就得额外声明 `dsh.client.external`
+		* 并指望有供给方，为几行状态代码引入装配风险不划算，所以当时用了本地 40 行容器。
+		*
+		* **0.1.7 它已经在基线表里**（`packages/client/web/src/seed.ts`），而且 `dsh.client.external`
+		* 对静态表名不产生图边（`packages/client/modules/src/index.ts`：external 要么是包行、
+		* 要么是静态表名）—— 装配风险为零。所以现在直接用官方 `createSnapshotStore`：
+		*   · 顺带拿到 **`persist`**（localStorage 持久化，皮肤 id 的首屏镜像要用它）；
+		*   · 状态引擎（zustand + immer）与官方插件一致，不再是"另一套"。
+		*
+		* 本地只保留官方没有的两点便利：`set(patch)` 的**浅比较短路**（无变化不发通知）与
+		* `makeUseStoreHook`（把 store 变成组件渲染期可调用的选择器钩子）。组件只依赖
+		* `get` / `subscribe`，所以换引擎对它们透明。
+		*/
+		/**
+		* 创建一个 store（官方引擎 + 本地便利层）。
 		* @param initial - 初始状态。
+		* @param options - 给了 `persist` 就用它作 localStorage 键持久化整个快照。
 		* @returns store 句柄。
 		*/
-		function createStore(initial) {
-			let snapshot = Object.freeze({ ...initial });
-			const listeners = /* @__PURE__ */ new Set();
-			const get = () => snapshot;
-			const subscribe = (listener) => {
-				listeners.add(listener);
-				return () => {
-					listeners.delete(listener);
-				};
-			};
-			const set = (patch) => {
-				let changed = false;
-				for (const key of Object.keys(patch)) if (patch[key] !== snapshot[key]) {
-					changed = true;
-					break;
-				}
-				if (!changed) return;
-				snapshot = Object.freeze({
-					...snapshot,
-					...patch
-				});
-				for (const listener of [...listeners]) listener();
-			};
+		function createStore(initial, options) {
+			const store = options?.persist === void 0 ? (0, _deepseek_ai_dsh_client_store.createSnapshotStore)(initial) : (0, _deepseek_ai_dsh_client_store.createSnapshotStore)(initial, { persist: { name: options.persist } });
 			return {
-				get,
-				subscribe,
-				set
+				get: () => store.getSnapshot(),
+				subscribe: store.subscribe,
+				set: (patch) => {
+					const current = store.getSnapshot();
+					if (!Object.keys(patch).some((key) => patch[key] !== current[key])) return;
+					store.update((draft) => {
+						Object.assign(draft, patch);
+					});
+				}
 			};
 		}
 		/**
@@ -534,11 +539,16 @@ window.__ModuleLoader__.load({
 		//#endregion
 		//#region src/skin-settings.ts
 		/**
-		* 皮肤偏好的常量与形状（宿主半边与浏览器半边共用）。
+		* 皮肤插件的常量与形状（宿主半边与浏览器半边共用，**唯一真相源**）。
 		*
-		* 记号：皮肤 id 存在 **localStorage**（客户端表现偏好，且要跨标签页实时同步）；
-		* 素材目录存在 **settings 的 `ui-skin` 命名空间**（宿主半边要读它来服务文件，
-		* localStorage 宿主读不到）。
+		* 0.1.7 的数据模型（与 0.1.5 不同，别按旧模型读）：
+		*   · 皮肤 id 与素材目录**都是本插件的设置**：宿主导出 `Config` 并用 `.volatile()`
+		*     标记可写字段；客户端用 `ctx.configForms.get(SKIN_ENTRY_ID)` 读写，写入落到
+		*     profile 的 cordis patch，条目重载后宿主 `apply()` 带新 config 再跑一次。
+		*   · 皮肤 id 另存一份 **localStorage 镜像**（`SKIN_STORAGE_KEY`），只为首屏不闪；
+		*     权威值始终在设置里。跨标签页同步由设置镜像负责，不靠 `storage` 事件。
+		*   · 0.1.7 起设置**按 profile 条目 id 定位**，不再有独立的"命名空间名"
+		*     （0.1.5 时代那个 `dsh-ui-skin` 命名空间已不存在）。
 		*/
 		/** 可选皮肤 id（DeepSeek 是产品默认）。 */
 		const SKIN_IDS = [
@@ -546,15 +556,22 @@ window.__ModuleLoader__.load({
 			"codex",
 			"claude-code"
 		];
-		/** 设置命名空间（宿主注册 + 客户端读写，必须一致）。 */
-		const SKIN_SETTINGS_NAMESPACE = "dsh-ui-skin";
-		/** 设置里承载"素材目录"的字段名。 */
-		const ASSETS_DIR_FIELD = "assetsDir";
-		/** 皮肤 id 字段名（树内形态用它写进设置；外部形态下皮肤走 localStorage，保留此常量供兼容）。 */
+		/**
+		* 设置定位 id = 本插件在 profile 里的条目 id。**必须与 `cordis.patch.yml` 的行 id 一致**：
+		* 它同时就是 0.1.7 的设置命名空间，写错的表现是设置读不出来（`status: 'unavailable'`）。
+		*
+		* ⚠️ 刻意用 `external-ui-skin` 而不是 `ui-skin`：树内曾有条目叫 `ui-skin`，同 id 会让
+		* loader 报 `duplicate loader entry id` 并使整个界面起不来（实测踩过）。0.1.7 虽已移除
+		* 树内皮肤，仍保留前缀，避免将来重新引入时再次撞车。
+		*/
+		const SKIN_ENTRY_ID = "external-ui-skin";
+		/** 设置字段名：皮肤 id。 */
 		const SKIN_FIELD = "skin";
+		/** 设置字段名：素材目录。 */
+		const ASSETS_DIR_FIELD = "assetsDir";
 		/** 没有任何持久化时的默认皮肤。 */
 		const DEFAULT_SKIN = "deepseek";
-		/** 浏览器端持久化键。 */
+		/** 皮肤 id 的 localStorage 镜像键（只为首屏不闪，不是权威值）。 */
 		const SKIN_STORAGE_KEY = "dsh.dshUiSkin.skin";
 		/** 承载当前皮肤品牌面的 body 属性。 */
 		const SKIN_ATTRIBUTE = "data-dsh-ui-skin";
@@ -1127,22 +1144,13 @@ window.__ModuleLoader__.load({
 		* 命名空间唯一，两个皮肤插件都注册 `settings.skin` 会撞（与 `provide` 同一类问题）。
 		*/
 		const SETTINGS_NS = "settings.dshUiSkin";
-		/** 从 localStorage 读皮肤 id，收窄成合法值。 */
-		function readStoredSkin() {
-			if (typeof localStorage === "undefined") return DEFAULT_SKIN;
-			try {
-				const value = localStorage.getItem(SKIN_STORAGE_KEY);
-				return isSkinId(value) ? value : DEFAULT_SKIN;
-			} catch {
-				return DEFAULT_SKIN;
-			}
-		}
-		/** 持久化皮肤 id（尽力而为：存储不可用时留在进程内）。 */
-		function writeStoredSkin(id) {
-			if (typeof localStorage === "undefined") return;
-			try {
-				localStorage.setItem(SKIN_STORAGE_KEY, id);
-			} catch {}
+		/**
+		* 把一个跨边界的值收窄成合法皮肤 id。
+		* @param value - 来自设置快照或本地镜像的值。
+		* @returns 合法 id；否则 undefined（由调用方决定回落什么）。
+		*/
+		function narrowSkin(value) {
+			return isSkinId(value) ? value : void 0;
 		}
 		/** 把皮肤 id 发布到 body 上（品牌面 CSS 的选举依据）。 */
 		function applyBodyAttribute(id) {
@@ -1154,38 +1162,28 @@ window.__ModuleLoader__.load({
 			ctx;
 			theme;
 			store;
+			persist;
 			id;
 			revision = 0;
 			snapshot;
 			disposer;
 			/**
-			* @param ctx - 所属上下文（change 事件在它上面发出；storage 监听经 effect 释放）。
+			* @param ctx - 所属上下文（change 事件在它上面发出）。
 			* @param theme - 承载皮肤覆盖层的主题服务。
 			* @param store - 设置行的 store（记录素材清单状态）。
+			* @param options - 初始 id（来自本地镜像）与写入持久化的回调。
 			*/
-			constructor(ctx, theme, store) {
+			constructor(ctx, theme, store, options) {
 				this.ctx = ctx;
 				this.theme = theme;
 				this.store = store;
-				this.id = readStoredSkin();
+				this.persist = options.persist;
+				this.id = options.initial;
 				this.snapshot = Object.freeze({
 					id: this.id,
 					revision: this.revision
 				});
 				this.applyLayer(this.id);
-				if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-					const onStorage = (event) => {
-						if (event.key !== "dsh.dshUiSkin.skin") return;
-						const next = isSkinId(event.newValue) ? event.newValue : DEFAULT_SKIN;
-						if (next !== this.id) this.adopt(next);
-					};
-					ctx.effect?.(() => {
-						window.addEventListener("storage", onStorage);
-						return () => {
-							window.removeEventListener("storage", onStorage);
-						};
-					}, "ui-skin: cross-tab storage adoption");
-				}
 			}
 			/**
 			* 读当前不可变快照。
@@ -1201,19 +1199,36 @@ window.__ModuleLoader__.load({
 			setSkin(id) {
 				if (!isSkinId(id)) throw new Error(`skin "${String(id)}" is not a built-in skin`);
 				if (this.id === id) return;
-				writeStoredSkin(id);
+				this.persist(id);
 				this.adopt(id);
 			}
-			/** 采纳一个已持久化的 id（storage 事件），不写回。 */
+			/**
+			* 采纳设置里的权威值（**不写回**，避免与设置形成写回环）。
+			* 其他标签页改了皮肤时，设置镜像会把新值推到这里，跨标签页同步即由此完成。
+			* @param id - 设置快照里的皮肤 id。
+			*/
+			adoptFromSettings(id) {
+				if (this.id !== id) this.adopt(id);
+			}
+			/** 采纳一个已持久化的 id，不写回。 */
 			adopt(id) {
 				this.id = id;
 				this.applyLayer(id);
 				this.publish();
 			}
-			/** 重新叠加覆盖层，并刷新 body 属性。 */
+			/** 重新叠加覆盖层，并刷新 body 属性。
+			*
+			* 顺序：**先叠新层，再撤旧层**。反过来（先 dispose 再 apply）会有一瞬没有任何
+			* 皮肤 token，整屏闪一下 —— 切换皮肤时肉眼可见。
+			*
+			* 这样写是安全的，因为 `ThemeRuntime.overrideTokens` 按 source 记账（一个 source
+			* 只有一层，重复调用即替换），并且**被替换后旧 disposer 自动变成 no-op**
+			* （见 ui-theme 的 `overrideTokens` 文档）；所以既没有空档，也不会留下旧层。
+			*/
 			applyLayer(id) {
-				this.disposer?.();
+				const previous = this.disposer;
 				this.disposer = this.theme.overrideTokens("dsh-ui-skin", skinById(id).tokens);
+				previous?.();
 				applyBodyAttribute(id);
 			}
 			publish() {
@@ -1233,7 +1248,7 @@ window.__ModuleLoader__.load({
 			"slots",
 			"locale",
 			"theme",
-			"settingsScope"
+			"configForms"
 		];
 		/**
 		* 客户端插件主体。
@@ -1241,7 +1256,15 @@ window.__ModuleLoader__.load({
 		*/
 		function apply(ctx) {
 			const store = createSkinRowStore();
-			const skin = new SkinRuntime(ctx, ctx.theme, store);
+			let scope;
+			const mirror = createStore({ skin: DEFAULT_SKIN }, { persist: SKIN_STORAGE_KEY });
+			const skin = new SkinRuntime(ctx, ctx.theme, store, {
+				initial: narrowSkin(mirror.get().skin) ?? "deepseek",
+				persist: (id) => {
+					mirror.set({ skin: id });
+					scope?.set(SKIN_FIELD, id);
+				}
+			});
 			ctx.provide?.("uiSkin", skin);
 			ctx.effect?.(() => {
 				ctx.locale?.register(SETTINGS_NS, {
@@ -1249,33 +1272,41 @@ window.__ModuleLoader__.load({
 					en
 				});
 			}, "ui-skin: settings row dictionaries");
-			let scope;
 			/** 从 scope 快照里取出 assetsDir（去空白；非字符串一律当空）。 */
 			const dirFromSnapshot = (snapshot) => {
 				const section = snapshot?.value;
 				const raw = section !== null && typeof section === "object" ? section[ASSETS_DIR_FIELD] : void 0;
 				return typeof raw === "string" ? raw.trim() : "";
 			};
+			/** 设置里**用户显式写过**的皮肤 id（区别于 schema 默认值）。 */
+			const userSkin = (snapshot) => {
+				const user = snapshot?.user;
+				if (user === null || typeof user !== "object") return void 0;
+				return narrowSkin(user[SKIN_FIELD]);
+			};
 			const syncDir = () => {
 				const dir = dirFromSnapshot(scope?.getSnapshot());
 				store.set({ assetsDir: dir });
 				return dir;
 			};
+			const syncSkin = () => {
+				const id = userSkin(scope?.getSnapshot());
+				if (id !== void 0) skin.adoptFromSettings(id);
+			};
 			ctx.effect?.(() => {
-				scope = ctx.settingsScope?.bind({
-					namespace: SKIN_SETTINGS_NAMESPACE,
-					decode: (value) => value
-				});
+				scope = ctx.configForms?.get(SKIN_ENTRY_ID);
 				if (scope === void 0) return () => {};
 				const stop = scope.subscribe(() => {
 					syncDir();
+					syncSkin();
 				});
 				syncDir();
+				syncSkin();
 				return () => {
 					stop();
 					scope = void 0;
 				};
-			}, "ui-skin: assetsDir scope");
+			}, "ui-skin: settings scope");
 			/** 写入素材目录：空串 = 清掉字段（回到默认目录）。 */
 			const writeDir = (dir) => {
 				try {
@@ -1343,9 +1374,9 @@ window.__ModuleLoader__.load({
 		exports.SETTINGS_NS = SETTINGS_NS;
 		exports.SKINS = SKINS;
 		exports.SKIN_ATTRIBUTE = SKIN_ATTRIBUTE;
+		exports.SKIN_ENTRY_ID = SKIN_ENTRY_ID;
 		exports.SKIN_FIELD = SKIN_FIELD;
 		exports.SKIN_IDS = SKIN_IDS;
-		exports.SKIN_SETTINGS_NAMESPACE = SKIN_SETTINGS_NAMESPACE;
 		exports.SKIN_STORAGE_KEY = SKIN_STORAGE_KEY;
 		exports.SkinRuntime = SkinRuntime;
 		exports.apply = apply;

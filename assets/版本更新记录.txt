@@ -17,6 +17,95 @@
 
 
 ========================================
+【v2.0.0】2026-09-16  ·  内置内核换代：0.1.5-rc.2 → 0.1.7-rc.2（重建 exe）
+========================================
+
+■ 一句话
+
+  便携版里那个单文件主程序**换了内核**：从 0.1.5-rc.2 升到 0.1.7-rc.2（官方 `dsh-v0.1.7-rc.2`，
+  含 0.1.6 那一代的变化）。跟着一起换的还有**两个通用插件**（人设切换 / 皮肤）——
+  它们原来调用 0.1.5 的设置服务 `settingsScope`，而 0.1.7 换成了 `configForms`；
+  不同步的话，新内核一启动就是「Failed to load plugins」错误页（实测撞到过）。
+
+■ 组成（本版**重建了 exe**，哈希与 v1.5.0 不同）
+
+  程序\deepseek-harness.exe           279.4 MB   **已重建**（内核 0.1.7-rc.2）
+  程序\deepseek-harness-rg.exe          5.2 MB   **已重建**
+  启动 DSH Web.cmd                               未换
+  start-dsh-web.ps1                               未换
+  诊断.ps1                                        未换
+  使用说明.txt                                    未换
+  插件\@dsh-external\dsh-novel-script\            未换（v1.5.0 已是最新）
+  插件\@dsh-external\dsh-prompt-compare\         未换（v1.5.0 已是最新）
+  插件\@dsh-external\dsh-persona-switcher\        **已更新**（settingsScope → configForms）
+  插件\@dsh-external\dsh-ui-skin\                 **已更新**（settingsScope → configForms）
+  插件\dsh-whale-widget\                          未换
+  notices\THIRD_PARTY_NOTICES.md                  **已更新**（按 0.1.7 的依赖清单重取）
+  notices\LICENSE-deepseek-harness.txt            未换
+  版本更新记录.txt                                本文件
+
+  整包 zip：DSH-Web.zip   约 87.8 MB（exe 本身从 232 MB 涨到 279 MB，包因此比 v1.5.0 厚约 16 MB）
+
+■ 为什么两个通用插件必须跟着换
+
+  0.1.7 的客户端**不再提供 `settingsScope` 服务**。人设切换与皮肤的客户端半边如果还在
+  `inject` 里等这个服务，就会一直 pending，整套 Web 启动直接报
+  「2 entries did not activate … Failed to load plugins」——界面只剩错误页。
+  这两个插件在开发目录里早已适配（改用 `configForms` 表单服务），本版把**适配后的构建**
+  连同它们的 `package.json`（`dsh.client.inject` 与 peer 范围也变了）一起同步进包。
+  两个剧本工作台（剧本批注 / 提示词对照）本来就是按新接口写的，没有这个问题。
+
+■ 另外修掉的一处打包拦路问题
+
+  0.1.7 的运行时闭包清单（内核仓库 `python/sdk-runtime/package.json`）漏了 5 个客户端包
+  （`dsh-client-store` / `dsh-client-ui-dockkit` / `dsh-client-ui-primitives` /
+  `dsh-client-ui-slots` / `dsh-util-workspace-path`），它们被几十个已入树的 `lib/client.js`
+  引用 —— 补齐后打包脚本的缺口扫描才从 `TOTAL MISSING = 5` 变成 0。
+  这是**内核仓库该修的东西**，本版为打包在本地补上了。
+
+■ 为什么是主版本号 +1
+
+  本文件顶部的规则写着「主 → 底层 DSH 换代（例如 0.1.5 → 0.2.0）或界面发生大改」——
+  这次换的正是底层内核（跨两个 rc：0.1.5-rc.2 → 0.1.7-rc.2）。
+
+■ 升级前请备份（本版第一次启动会做数据迁移）
+
+  · 便携版的数据在 `%LOCALAPPDATA%\DSH-Web`（对话记录、设置、密钥），和程序文件夹是分开的。
+  · 0.1.7 读的会话格式比 0.1.5 新，**第一次启动会把老数据往上迁移**（内核里带着
+    v0→v1→v2→v3→v4 的迁移链）。迁移是单向的 —— **升级前先复制一份数据目录**，要回退才有退路。
+  · 升级方式不变：关掉窗口 → 用新文件夹替换旧的 → 双击启动（记录与设置保留）。
+
+■ 已知问题与边界
+
+  · 便携包**不随包分发**两个运行时资源目录：`…-office`（LibreOffice，约 192 MB）与
+    `win-x64`（Python + Node 载体，约 270 MB）—— 它们由内核构建产出、给 Python SDK 分发用。
+    本版冒烟测试确认**内核启动、5 个插件挂载、两个剧本工作台**都不依赖它们；
+    要在这类技能（Office/PDF 转换、Python 侧运行时）上用，才需要单独备好这两个目录。
+  · 插件与树内皮肤同时启用时仍是两套皮肤各管一套设置；启动器默认关掉树内那条。
+
+■ 核对信息
+
+  主程序 SHA256（**本版重建，与 v1.5.0 不同**）：
+    __SHA256:程序/deepseek-harness.exe__
+  rg sidecar SHA256（本版重建）：
+    __SHA256:程序/deepseek-harness-rg.exe__
+  启动器 start-dsh-web.ps1 SHA256（**未变**）：
+    __SHA256:start-dsh-web.ps1__
+  使用说明.txt SHA256（**未变**）：
+    __SHA256:使用说明.txt__
+  诊断.ps1 SHA256（**未变**）：
+    __SHA256:诊断.ps1__
+  启动 DSH Web.cmd SHA256（**未变**）：
+    __SHA256:启动 DSH Web.cmd__
+  人设切换插件（本版改动过的文件）SHA256：
+    __SHA256:插件/@dsh-external/dsh-persona-switcher/lib/client.js__
+    __SHA256:插件/@dsh-external/dsh-persona-switcher/lib/index.js__
+  皮肤插件（本版改动过的文件）SHA256：
+    __SHA256:插件/@dsh-external/dsh-ui-skin/lib/client.js__
+    __SHA256:插件/@dsh-external/dsh-ui-skin/lib/index.js__
+
+
+========================================
 【v1.5.0】2026-09-16  ·  剧本批注新增「人工编辑模式」；修掉两个插件样式互相覆盖
 ========================================
 
