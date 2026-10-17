@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-prompt-compare",
-  "version": "0.1.0",
-  "description": "提示词对照 · 审阅期工作台：以集为单位对照剧本与视频提示词，在提示词上划词写批注，批注写成指令交给 agent 改稿；对话以浮窗形式与工作台同屏。",
+  "version": "0.2.0",
+  "description": "提示词对照 · 审阅期工作台：以集为单位对照剧本与视频提示词，划词写批注，批注写成指令交给 agent 修改；对话以浮窗形式与工作台同屏。",
   "private": true,
   "type": "module",
   "main": "./lib/index.js",
@@ -16,7 +16,7 @@
   "license": "MIT",
   "peerDependencies": {
     "cordis": ">=4.0.0-rc <5",
-    "@deepseek-ai/dsh-client-ui-slots": ">=0.0.1-rc <2"
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.x"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
@@ -43,7 +43,6 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-layout",

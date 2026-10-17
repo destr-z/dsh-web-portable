@@ -237,26 +237,11 @@ $profilePatchContent = @'
       name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
 '@
 
-# 关掉**树内**那条皮肤。
-#
-# 背景：官方源码/自制 fork 构建的 exe 里，web-app bundle 自带一条 id=ui-skin 的
-# 皮肤（packages/client/ui-skin，编进 exe、不在 插件\ 里）。而本便携包自带的
-# @dsh-external/dsh-ui-skin 是同一功能的独立插件版本。两者互不相干，但都往
-# 「设置 ▸ 通用」的同一个槽位注册 —— 结果是两个「皮肤」标题、且树内那份盖住插件
-# 那份（树内那份没有素材目录输入框，用户会以为新功能没做出来）。
-#
-# 为什么敢无条件写：**实测过** disable 一个不存在的 id 不会让 loader 报错
-# （在隔离实例里拿 this-id-does-not-exist-xyz 试过，实例照常启动）。所以这里
-# 不需要"先探测 exe 里有没有那条" —— 官方源码构建的 exe（没有树内皮肤）不受影响。
-$profilePatchContent += @'
+# 注意：0.2.1 起内核里**没有**树内 ui-skin 了（packages/client/ui-skin 已删除），
+# 所以这里不再写「disable 树内皮肤」那条。老版本启动器写进用户 profile 的
+# `- id: ui-skin / disabled: true` 会在下面被识别并摘掉，免得留下悬空的 patch 条目。
 
-# 关掉树内那条同名皮肤（原因见启动器注释）：它与随包插件抢同一个设置槽位。
-# disable 一个不存在的 id 是无害的，所以这一条对没有树内皮肤的 exe 也安全。
-- id: ui-skin
-  disabled: true
-'@
-
-# 已有内容时要"只补缺的段"：这三段是启动器必须保证存在的东西。
+# 已有内容时要"只补缺的段"：这两段是启动器必须保证存在的东西。
 # 用正则探测是不是已经有了，避免重复插入（顶层数组里重复的 insert 会报重复行 id）。
 $profileRequiredBlocks = @(
   @{
@@ -266,10 +251,6 @@ $profileRequiredBlocks = @(
   @{
     Probe = 'directory-picker-browse-surface'
     Text  = "- insert:`r`n    - id: directory-picker-browse`r`n      name: '@deepseek-ai/dsh-host-directory-picker-browse'`r`n    - id: directory-picker-browse-surface`r`n      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'"
-  },
-  @{
-    Probe = '(?m)^-\s*id:\s*ui-skin\s*$'
-    Text  = "# 关掉树内那条同名皮肤（原因见启动器注释）：它与随包插件抢同一个设置槽位。`r`n# disable 一个不存在的 id 是无害的，所以这一条对没有树内皮肤的 exe 也安全。`r`n- id: ui-skin`r`n  disabled: true"
   }
 )
 
@@ -277,6 +258,21 @@ try {
   New-Item -ItemType Directory -Force -Path $profileDir | Out-Null
   $patchExists = Test-Path -LiteralPath $profilePatch
   $patchRaw = if ($patchExists) { [System.IO.File]::ReadAllText($profilePatch, (New-Object System.Text.UTF8Encoding($false))) } else { '' }
+  # 备份必须记"写之前"的内容；下面清理旧条目会就地改 $patchRaw，所以先留一份原件。
+  $patchOriginal = $patchRaw
+
+  # 0.2.1 的内核里已经没有树内皮肤，旧启动器写过的那条成了悬空 patch。
+  # 只摘我们自己逐字写过的那一段；用户自己加的补丁一个字都不碰。
+  $legacyUiSkinBlockCrlf = "# 关掉树内那条同名皮肤（原因见启动器注释）：它与随包插件抢同一个设置槽位。`r`n# disable 一个不存在的 id 是无害的，所以这一条对没有树内皮肤的 exe 也安全。`r`n- id: ui-skin`r`n  disabled: true"
+  $legacyUiSkinBlockLf   = $legacyUiSkinBlockCrlf -replace "`r`n", "`n"
+  $patchCleaned = $false
+  foreach ($legacy in @($legacyUiSkinBlockCrlf, $legacyUiSkinBlockLf)) {
+    if ($patchRaw.Contains($legacy)) {
+      $patchRaw = $patchRaw.Replace($legacy, '').TrimEnd() + "`r`n"
+      $patchCleaned = $true
+    }
+  }
+
   # 去掉注释与空白后还剩什么：空、或只剩 `[]` = 程序生成的空模板，里面没有用户数据
   $patchStripped = (($patchRaw -split "`r?`n") | Where-Object { $_.Trim() -ne '' -and $_.Trim() -notlike '#*' }) -join "`n"
 
@@ -292,11 +288,11 @@ try {
     foreach ($block in $profileRequiredBlocks) {
       if ($patchRaw -notmatch $block.Probe) { $append += "`r`n" + $block.Text + "`r`n" }
     }
-    if ($append -ne '') {
+    if ($append -ne '' -or $patchCleaned) {
       # 这个文件里现在也有用户的设置，写之前先备份（保留最近 3 份）
       try {
         $backup = "$profilePatch.bak-launcher-" + (Get-Date).ToString('yyyyMMdd-HHmmss')
-        [System.IO.File]::WriteAllText($backup, $patchRaw, (New-Object System.Text.UTF8Encoding($false)))
+        [System.IO.File]::WriteAllText($backup, $patchOriginal, (New-Object System.Text.UTF8Encoding($false)))
         Get-ChildItem -LiteralPath $profileDir -Filter 'cordis.patch.yml.bak-launcher-*' -File -ErrorAction SilentlyContinue |
           Sort-Object LastWriteTime -Descending | Select-Object -Skip 3 |
           ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
@@ -899,8 +895,8 @@ if ($code -ne 0 -or -not $urlLine) {
       Write-Host '    退路一：把「插件」整个文件夹改名为「插件_停用」，再启动一次；' -ForegroundColor Yellow
       Write-Host '            能起来就说明问题出在插件上，然后把里面的插件逐个放回来定位。' -ForegroundColor Yellow
       Write-Host '    退路二：运行「诊断.ps1」，看第 4 节 —— 它会指出哪个插件形态不对。' -ForegroundColor Yellow
-      Write-Host '    （本版自带「人设」「剧本批注」「提示词对照」「小鲸鱼余额挂件」四个' -ForegroundColor Yellow
-      Write-Host '      插件；从别处拿来的插件如果不带 lib 文件夹、或者声明了要联网下载的' -ForegroundColor Yellow
+      Write-Host '    （本版自带「人设」「皮肤」「剧本批注」「提示词对照」「小鲸鱼余额挂件」' -ForegroundColor Yellow
+      Write-Host '      五个插件；从别处拿来的插件如果不带 lib 文件夹、或者声明了要联网下载的' -ForegroundColor Yellow
       Write-Host '      依赖，就是这种情况。）' -ForegroundColor Yellow
     }
   }

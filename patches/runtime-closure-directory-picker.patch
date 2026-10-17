@@ -1,0 +1,26 @@
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 5f38bae356..f7b1149e04 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -15625,6 +15625,9 @@ importers:
+       '@deepseek-ai/dsh-home-paths':
+         specifier: workspace:*
+         version: link:../../packages/util/home-paths
++      '@deepseek-ai/dsh-host-directory-picker':
++        specifier: workspace:*
++        version: link:../../packages/host/directory-picker
+       '@deepseek-ai/dsh-host-plugin-inventory':
+         specifier: workspace:*
+         version: link:../../packages/host/plugin-inventory
+diff --git a/python/sdk-runtime/package.json b/python/sdk-runtime/package.json
+index 19f2de7e0c..bd43f8346e 100644
+--- a/python/sdk-runtime/package.json
++++ b/python/sdk-runtime/package.json
+@@ -57,6 +57,7 @@
+     "@deepseek-ai/dsh-goal": "workspace:*",
+     "@deepseek-ai/dsh-goal-round-driver": "workspace:*",
+     "@deepseek-ai/dsh-home-paths": "workspace:*",
++    "@deepseek-ai/dsh-host-directory-picker": "workspace:*",
+     "@deepseek-ai/dsh-host-plugin-inventory": "workspace:*",
+     "@deepseek-ai/dsh-host-webserver": "workspace:*",
+     "@deepseek-ai/dsh-http-proxy": "workspace:*",

@@ -17,6 +17,94 @@
 
 
 ========================================
+【v3.0.0】2026-10-17  ·  内置内核换代：0.1.7-rc.2 → 0.2.1-rc.2（重建 exe）
+========================================
+
+■ 一句话
+
+  · **内核从 0.1.7-rc.2 升到 0.2.1-rc.2**（跨 0.2.0 与 0.2.1 两代）。随包的 4 个自研插件
+    同步升到 **0.2.0**（peer 全部改成 `0.2.x`），否则新内核加载时会出现
+    「Failed to load plugins」错误页。
+  · **「打开已有会话报 resume failed」的兜底补上了**。单文件 exe 里 Worker 线程读不到
+    快照里的 `worker.cjs`；本版在验证器外层加兜底：Worker 起不来就退回**进程内验证**
+    （算法完全一致，只少了"新 isolate"这层加固）。这处上游没有，已固化成
+    `patches/session-verifier-fallback.patch`，构建时自动应用 —— 不会再"下次重建就丢"。
+  · **启动器不再写「关掉树内皮肤」那条**：0.2.1 的内核里已经没有树内 ui-skin；
+    旧版写进用户 profile 的 `- id: ui-skin / disabled: true` 会被识别并摘掉，
+    避免留下悬空 patch 条目。
+  · **「设置 ▸ 插件」里的元信息错误红字修掉了**：0.2.1 的依赖树把插件嵌在
+    `@deepseek-ai/dsh/node_modules/...` 下，而原来的资产通配只匹配顶层
+    `@deepseek-ai/dsh-*`，四个实验性插件的 `icon.svg` 因此没被烤进 exe。
+    现在图片资产按整个 `node_modules/**` 收集（合计不到 1 MB），exe 只涨 0.7 MB。
+  · **「Codex / Claude Code 子智能体」不再误报「异常」**：这两条是官方按需插件，本来就没装。
+    0.2.1 的 `officialBundleInstallTarget` 先对安装锚点做 `realpathSync`，而单文件 exe 的
+    `/snapshot` 是 pkg 的虚拟挂载：realpath 会把它映射成 `/node/...` 再去 stat，直接
+    `ENOENT`，UI 把异常渲染成红色「异常」。本版在打包运行时**跳过 realpath**、直接读清单
+    （`process.pkg` 或 `/snapshot/` 路径都算打包运行），开发版行为不变；
+    另外给这条路径加了诊断日志，以后再失败会在 launcher 日志里写明锚点和原因。
+
+■ 为什么必须换插件
+
+  0.2.x 的插件兼容性判定改成「先看 `engines.dsh`，没有才看 peer」；客户端设置/槽位
+  API 也又动过一轮。随包 4 个插件都按 0.2 重新构建、peer 写成 `0.2.x`，版本号统一到
+  `0.2.0`。`dsh-whale-widget`（第三方，0.2.10）没有声明 peer，按回退规则仍然接受，
+  本版未改它。
+
+■ 0.2.x 里和便携包有关的变化（备忘）
+
+  · `schedule` 不再随 base bundle 发布（改成按需安装）。界面上没有定时任务入口属于预期。
+  · 子路径插件改从 `locale` / `icon` 导出读标题和图片，不再读子路径 `package.json`。
+  · 运行时不变式包（`@deepseek-ai/dsh-invariants` 等）整体移除。
+  · profile 结构没变：仍是 `dsh.profile.bundles` + `dependencies`，启动器的插件同步
+    逻辑原样可用；`patchReload` 字段已不存在，写了也无害。
+
+■ 组成（本版**重建了 exe**）
+
+  程序\deepseek-harness.exe            内核 0.2.1-rc.2（含本地 worker 兜底补丁）
+                                       __SHA256:程序/deepseek-harness.exe__
+  程序\deepseek-harness-rg.exe         __SHA256:程序/deepseek-harness-rg.exe__
+  start-dsh-web.ps1                    __SHA256:start-dsh-web.ps1__
+                                       （去掉树内皮肤那条 + 清理旧条目 + 插件数量文案）
+  诊断.ps1                             __SHA256:诊断.ps1__（未换）
+  使用说明.txt                         __SHA256:使用说明.txt__（未换）
+  启动 DSH Web.cmd                     __SHA256:启动 DSH Web.cmd__（未换）
+
+  插件\@dsh-external\dsh-novel-script\        **已更新（0.2.0）**
+    lib\index.js                       __SHA256:插件/@dsh-external/dsh-novel-script/lib/index.js__
+    lib\client.js                      __SHA256:插件/@dsh-external/dsh-novel-script/lib/client.js__
+    lib\shared\edit.js                 __SHA256:插件/@dsh-external/dsh-novel-script/lib/shared/edit.js__
+  插件\@dsh-external\dsh-prompt-compare\      **已更新（0.2.0）**
+    lib\client.js                      __SHA256:插件/@dsh-external/dsh-prompt-compare/lib/client.js__
+  插件\@dsh-external\dsh-persona-switcher\    **已更新（0.2.0）**
+    lib\index.js                       __SHA256:插件/@dsh-external/dsh-persona-switcher/lib/index.js__
+    lib\client.js                      __SHA256:插件/@dsh-external/dsh-persona-switcher/lib/client.js__
+  插件\@dsh-external\dsh-ui-skin\             **已更新（0.2.0）**
+    lib\index.js                       __SHA256:插件/@dsh-external/dsh-ui-skin/lib/index.js__
+    lib\client.js                      __SHA256:插件/@dsh-external/dsh-ui-skin/lib/client.js__
+  插件\dsh-whale-widget\                     未换（0.2.10）
+  notices\                                    **已更新**（按 0.2.1 依赖清单重取）
+  版本更新记录.txt                            本文件
+
+■ 已经验过
+
+  · 构建期：运行时闭包校验（4 个 agent preset + 186 个 workspace 包闭合）通过；全部
+    build gate 通过；`vfs-gap-check` 无缺失包（按文件真实解析，浏览器半边单独排除）。
+  · 打包后：`selfcheck.mjs` / `selfcheck.ps1` / `test-plugin-sync.ps1` / `verify-pack.mjs` 全部通过。
+  · 真机（真实数据目录副本）：界面正常渲染；启动日志只剩 `office-to-pdf` 一条未激活；
+    5 个插件都登记进 profile；皮肤宿主半边跑起来了（日志有 `[ui-skin] 素材目录：…`）；
+    `session-persistence-jsonl` 单测 736 项通过（唯一失败项是本机没有 symlink 权限的
+    环境性用例，与本改动无关）。
+
+■ 已知问题与边界
+
+  · 官方的 `office-to-pdf` 仍 `failed to import`：它要那两个约 460 MB 的运行时资源目录，
+    本包故意不随包分发；需要时把目录放到 `程序\` 旁边。
+  · 面板里已安装插件的「卸载」按钮会去调 pnpm，便携版没有 pnpm → 预期失败并给提示；
+    真要卸某个随包插件，把 `插件\` 里对应文件夹删掉重启即可。
+  · 单文件 exe 的 Worker 隔离仍然不可用（打包形态的固有限制），只是有进程内兜底。
+
+
+========================================
 【v2.0.2】2026-09-28  ·  修「设置被启动器覆盖」与「会话恢复失败」（重建 exe）
 ========================================
 

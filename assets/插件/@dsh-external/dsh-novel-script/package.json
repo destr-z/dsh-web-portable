@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-novel-script",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "小说转剧本 · 审阅期工作台：以集为单位对照原文与剧本，划词写批注，批注写成指令交给 agent 修改；对话以浮窗形式与工作台同屏。",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
   "license": "MIT",
   "peerDependencies": {
     "cordis": ">=4.0.0-rc <5",
-    "@deepseek-ai/dsh-client-ui-slots": ">=0.0.1-rc <2"
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.x"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
@@ -24,7 +24,9 @@
   },
   "scripts": {
     "build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "verify": "node scripts/verify-edit.mjs",
+    "verify:host": "node scripts/verify-host-edit.mjs"
   },
   "exports": {
     ".": {
@@ -43,7 +45,6 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-layout",

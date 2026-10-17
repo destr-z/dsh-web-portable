@@ -1,0 +1,60 @@
+diff --git a/packages/boot/plugin-manager/src/index.ts b/packages/boot/plugin-manager/src/index.ts
+index 6734d2872b..a2ab0604f0 100644
+--- a/packages/boot/plugin-manager/src/index.ts
++++ b/packages/boot/plugin-manager/src/index.ts
+@@ -335,7 +335,12 @@ export class PluginManager extends TypertRemoteService {
+       let targetError: ManagementError | undefined
+       if (offered !== undefined) {
+         try { target = { installTarget: officialBundleInstallTarget(name, this.profile.installAnchor, runtimeVersion) } }
+-        catch (error) { targetError = managementError(error) }
++        catch (error) {
++          targetError = managementError(error)
++          // One line per failed catalog entry: the page only shows a generic badge, so this is the
++          // only place a packaged installation can explain why an on-demand bundle is not offered.
++          console.error(`[plugin-manager] no install target for ${name} (anchor: ${this.profile.installAnchor}):`, error)
++        }
+       }
+       const catalogMeta = offered === undefined ? {} : { meta: offered.meta }
+       if (offered !== undefined && !installed && !shipped) {
+diff --git a/packages/boot/plugin-manager/src/official-install-target.ts b/packages/boot/plugin-manager/src/official-install-target.ts
+index 8b5aa5f1e8..a2f75b02b1 100644
+--- a/packages/boot/plugin-manager/src/official-install-target.ts
++++ b/packages/boot/plugin-manager/src/official-install-target.ts
+@@ -11,6 +11,22 @@ function manifestAt(file: string): WorkspaceManifest {
+   return JSON.parse(readFileSync(file, 'utf8')) as WorkspaceManifest
+ }
+ 
++/**
++ * Whether the running installation is a single-file executable.
++ *
++ * Such an executable mounts its package tree from a virtual snapshot and reports the deployed
++ * manifests, which keep the `workspace:` protocols they were copied with. There is no checkout
++ * behind them, so the source-installation branch below would reject a perfectly valid install.
++ * `process.pkg` is set by the executable runtime itself, so it also covers layouts where the
++ * anchor path is rewritten before it reaches this module.
++ * @param anchor - Real path of the running DSH package manifest.
++ * @returns true when this process runs from a single-file executable.
++ */
++function isPackagedInstallation(anchor: string): boolean {
++  const packaged = (process as { readonly pkg?: unknown }).pkg !== undefined
++  return packaged || /[\\/]snapshot[\\/]/i.test(anchor)
++}
++
+ /**
+  * Offer a source checkout link or an exact published package version. Source installations are
+  * identified by the real CLI manifest and its unpacked workspace dependencies, including Desktop's
+@@ -22,9 +38,12 @@ function manifestAt(file: string): WorkspaceManifest {
+  * @throws when a source installation lacks its workspace package, bundle patch, or built runtime.
+  */
+ export function officialBundleInstallTarget(name: string, installAnchor: string, version: string): { spec: string; version: string } {
+-  const anchor = realpathSync(installAnchor)
++  // A single-file executable serves its manifest from a virtual mount that cannot be realpath'd
++  // (`ENOENT: realpath '/node/...'`), and it never hosts a checkout, so the original path is used.
++  const anchor = isPackagedInstallation(installAnchor) ? installAnchor : realpathSync(installAnchor)
+   const installation = manifestAt(anchor)
+-  const source = installation.name === '@deepseek-ai/dsh'
++  const source = !isPackagedInstallation(anchor)
++    && installation.name === '@deepseek-ai/dsh'
+     && Object.values(installation.dependencies ?? {}).some(value => value.startsWith('workspace:'))
+   if (!source) return { spec: `${name}@${version}`, version }
+   const root = resolve(dirname(anchor), '../..')

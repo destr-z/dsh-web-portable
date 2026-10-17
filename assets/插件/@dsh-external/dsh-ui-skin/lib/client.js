@@ -143,6 +143,105 @@ window.__ModuleLoader__.load({
 			});
 		}
 		//#endregion
+		//#region src/client/card-styles.ts
+		/**
+		* 皮肤选择卡的样式表（运行时注入）。
+		*
+		* 为什么不写内联 style：**`:hover` 和内联样式没法共存** —— 内联只能表达静态值，
+		* 而"鼠标放上去要有反馈、选中要有填充"恰恰是伪类干的事。之前三张卡是纯内联的，
+		* 于是只有选中态（靠 JS 换一份 style 对象），**hover 一点反应都没有**；同一个
+		* 设置页里官方"外观"那三张卡是会泛一层淡底色的，两者并排就很明显。
+		*
+		* 这里的规则**逐条照抄**官方那张卡（`@deepseek-ai/dsh-client-ui-theme` 的
+		* `AppearanceRow.module.css` 里 `.themeCube` / `.themeCube:hover:not(.selected)` /
+		* `.selected`），只换了类名、并把"选中"的选择器换成本组件已有的
+		* `aria-pressed='true'`：
+		*
+		*   · 几何：flex 1 1 180px、padding 20/32、圆角 `--dsw-radius-xl`、gap 4
+		*   · hover（未选中）：`--dsw-alias-interactive-bg-hover`
+		*   · 选中：`--dsw-alias-bg-module-platform` + `--dsw-static-neutral-bluish-400` 边框
+		*
+		* 官方那三条规则本身**没有 transition**，切换是瞬时的；这里保持一致 ——
+		* 要更"顺滑"可以再加一条 `transition: background-color/border-color`，
+		* 但那就和外观行不一样了。
+		*/
+		/** 样式元素的 id：重复注册时据此判断是否已经装过。 */
+		const STYLE_ID = "dsh-ui-skin-card-styles";
+		/** 卡片类名（选中态用 `aria-pressed` 表达，与官方 `aria-pressed` 语义一致）。 */
+		const CARD_CLASS = "dsh-ui-skin-card";
+		/** 卡片标记容器的类名。 */
+		const CARD_MARK_CLASS = "dsh-ui-skin-card-mark";
+		/** 卡片文字标签的类名。 */
+		const CARD_LABEL_CLASS = "dsh-ui-skin-card-label";
+		/**
+		* 卡片样式表正文。
+		*
+		* 所有颜色都走官方 alias token，因此**自动跟随明暗与皮肤**，不需要按模式分支。
+		*/
+		const CARD_CSS = `
+.${CARD_CLASS} {
+  box-sizing: border-box;
+  flex: 1 1 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 20px 32px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-xl, 20px);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+/* 未选中时鼠标悬停泛一层淡底 —— 与官方外观卡一致；选中态不叠这层，
+   否则会和选中填充互相盖住、看不出到底选没选中。 */
+.${CARD_CLASS}:hover:not([aria-pressed='true']) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 选中：填充 + 加重的边框。bluish-400 是静态 token，alias 层没有对应名字。 */
+.${CARD_CLASS}[aria-pressed='true'] {
+  background: var(--dsw-alias-bg-module-platform);
+  border-color: var(--dsw-static-neutral-bluish-400);
+}
+
+/* 标记区：位图/矢量的宿主，固定高度让三张卡的文字基线对齐。 */
+.${CARD_MARK_CLASS} {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+}
+
+/* 文字：官方那张卡不设字重（继承 400），这里同样不再加粗。 */
+.${CARD_LABEL_CLASS} {
+  white-space: nowrap;
+}
+`;
+		/**
+		* 把卡片样式表装进文档（幂等）。
+		*
+		* 由客户端插件在 `apply` 里调用一次；插件卸载时移除节点，避免重载后堆叠多份。
+		*
+		* @returns 卸载函数；非浏览器环境返回空操作。
+		*/
+		function installCardStyles() {
+			if (typeof document === "undefined") return () => {};
+			if (document.getElementById(STYLE_ID) !== null) return () => {};
+			const style = document.createElement("style");
+			style.id = STYLE_ID;
+			style.textContent = CARD_CSS;
+			document.head.appendChild(style);
+			return () => {
+				style.remove();
+			};
+		}
+		//#endregion
 		//#region src/client/SkinRow.tsx
 		/**
 		* 皮肤设置行：注册进「设置 ▸ 通用」的项目槽，紧跟「外观」行下面。
@@ -205,38 +304,6 @@ window.__ModuleLoader__.load({
 				alignItems: "stretch",
 				gap: "8px",
 				flexWrap: "wrap"
-			},
-			card: {
-				boxSizing: "border-box",
-				flex: "1 1 140px",
-				display: "flex",
-				flexDirection: "column",
-				alignItems: "center",
-				justifyContent: "center",
-				gap: "4px",
-				padding: "12px 16px",
-				border: "0.5px solid var(--dsw-alias-border-l4)",
-				borderRadius: "16px",
-				background: "transparent",
-				font: "inherit",
-				fontSize: "14px",
-				lineHeight: "22px",
-				color: "var(--dsw-alias-label-primary)",
-				cursor: "pointer"
-			},
-			cardSelected: {
-				background: "var(--dsw-alias-bg-module-platform)",
-				borderColor: "var(--dsw-static-neutral-bluish-400)"
-			},
-			mark: {
-				display: "inline-flex",
-				alignItems: "center",
-				justifyContent: "center",
-				height: "38px"
-			},
-			label: {
-				fontWeight: 500,
-				whiteSpace: "nowrap"
 			},
 			fieldBlock: {
 				display: "flex",
@@ -372,22 +439,19 @@ window.__ModuleLoader__.load({
 						style: S.cardRow,
 						children: CARDS.map(({ id, labelKey, mark }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
 							type: "button",
-							style: skin === id ? {
-								...S.card,
-								...S.cardSelected
-							} : S.card,
+							className: CARD_CLASS,
 							"aria-pressed": skin === id,
 							onClick: () => {
 								setSkin(id);
 							},
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								style: S.mark,
+								className: CARD_MARK_CLASS,
 								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(CardMark, {
 									mark,
 									assets
 								})
 							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								style: S.label,
+								className: CARD_LABEL_CLASS,
 								children: t(labelKey)
 							})]
 						}, id))
@@ -1258,12 +1322,34 @@ window.__ModuleLoader__.load({
 			const store = createSkinRowStore();
 			let scope;
 			const mirror = createStore({ skin: DEFAULT_SKIN }, { persist: SKIN_STORAGE_KEY });
+			/**
+			* 已写入、还没被回声确认的皮肤 id，**先进先出**。
+			*
+			* 写入是立即发的（不拖延，否则"点完立刻刷新"会丢掉最后一次选择）；但宿主会把
+			* 新配置原样推回来，那个回声**不能再次采纳** —— 本地已经生效了，再采纳一次就是
+			* "回放上一次选择"。连点时回声会一条条回来，界面就会把中间选过的皮肤挨个放一遍，
+			* 肉眼看到的是连闪。所以按顺序把回声吃掉。
+			*/
+			const pendingEcho = [];
+			/**
+			* 立即写皮肤设置。
+			*
+			* @param id - 用户刚选中的皮肤。
+			*/
+			const writeSkin = (id) => {
+				mirror.set({ skin: id });
+				if (scope === void 0) return;
+				if (pendingEcho.length > 8) pendingEcho.length = 0;
+				pendingEcho.push(id);
+				try {
+					scope.set(SKIN_FIELD, id);
+				} catch {
+					pendingEcho.pop();
+				}
+			};
 			const skin = new SkinRuntime(ctx, ctx.theme, store, {
 				initial: narrowSkin(mirror.get().skin) ?? "deepseek",
-				persist: (id) => {
-					mirror.set({ skin: id });
-					scope?.set(SKIN_FIELD, id);
-				}
+				persist: writeSkin
 			});
 			ctx.provide?.("uiSkin", skin);
 			ctx.effect?.(() => {
@@ -1272,6 +1358,7 @@ window.__ModuleLoader__.load({
 					en
 				});
 			}, "ui-skin: settings row dictionaries");
+			ctx.effect?.(installCardStyles, "ui-skin: settings row card styles");
 			/** 从 scope 快照里取出 assetsDir（去空白；非字符串一律当空）。 */
 			const dirFromSnapshot = (snapshot) => {
 				const section = snapshot?.value;
@@ -1291,7 +1378,13 @@ window.__ModuleLoader__.load({
 			};
 			const syncSkin = () => {
 				const id = userSkin(scope?.getSnapshot());
-				if (id !== void 0) skin.adoptFromSettings(id);
+				if (id === void 0) return;
+				const at = pendingEcho.indexOf(id);
+				if (at >= 0) {
+					pendingEcho.splice(at, 1);
+					return;
+				}
+				skin.adoptFromSettings(id);
 			};
 			ctx.effect?.(() => {
 				scope = ctx.configForms?.get(SKIN_ENTRY_ID);
@@ -1307,6 +1400,9 @@ window.__ModuleLoader__.load({
 					scope = void 0;
 				};
 			}, "ui-skin: settings scope");
+			ctx.effect?.(() => () => {
+				pendingEcho.length = 0;
+			}, "ui-skin: skin echo queue");
 			/** 写入素材目录：空串 = 清掉字段（回到默认目录）。 */
 			const writeDir = (dir) => {
 				try {

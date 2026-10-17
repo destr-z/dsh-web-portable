@@ -70,6 +70,18 @@ function Invoke-Native {
   } finally { $ErrorActionPreference = $previous }
 }
 
+# git apply 的 --check / --reverse --check 靠**非零退出码**表达"补丁没应用 / 不能应用"，
+# 这是它的正常语义，不是故障。但 PS 5.1 在 $ErrorActionPreference='Stop' 下会把原生命令的
+# stderr 包成终止错误，`2>$null` 也拦不住 —— 所以和 Invoke-Native 一样包一层，
+# 只认退出码，别让"预期的失败"把脚本掐断。
+function Invoke-GitApply {
+  param([string]$Repo, [string[]]$Arguments)
+  # core.autocrlf=true 会让 `git apply` 把目标文件写成 CRLF，而补丁本身是 LF —— 反向撤回时
+  # 就一行都对不上。补丁必须按字节匹配，所以这里强制关掉换行转换。
+  Invoke-Native 'git' (@('-c', 'core.autocrlf=false', '-C', $Repo) + $Arguments) -Capture
+  $script:GitExit = $script:NativeExit
+}
+
 # ---------- 1. 构建 exe ----------
 Step '构建单文件 exe'
 if (-not (Test-Path (Join-Path $Repo 'package.json'))) {
@@ -81,14 +93,43 @@ if (-not (Test-Path (Join-Path $Repo 'dist-exe')) -and $ReuseExe) {
 if ($ReuseExe) {
   Write-Host '  -ReuseExe：复用 dist-exe 里已有的 exe（不重新打包，保证哈希与版本记录一致）'
 } else {
-  Push-Location $Repo
+  # ---------- 1a. 应用本地补丁（构建结束后自动撤回） ----------
+  # 单文件 exe 有几处上游没有、但便携版必须的改动。它们只对"打包成 exe"有意义，
+  # 不该混进官方源码 checkout —— 所以构建前临时 git apply，构建完（成功或失败）再
+  # git apply -R 撤回，源码仓库保持上游原样。
+  # 若某个补丁在构建前就已经在源码里（人手工应用过），跳过它、也不替人撤回。
+  $appliedPatches = New-Object System.Collections.ArrayList
   try {
-    $env:LEFTHOOK = '0'
-    $buildArgs = @('exec', 'tsx', 'scripts/build-exe-for-python-sdk.ts', '--targets=node24-win-x64')
-    if ($SkipBuild) { $buildArgs += '--skip-build' }
-    Invoke-Native 'pnpm' $buildArgs
-    if ($script:NativeExit -ne 0) { throw "exe 构建失败（退出码 $script:NativeExit）" }
-  } finally { Pop-Location }
+    $patchDir = Join-Path $PSScriptRoot 'patches'
+    if (Test-Path -LiteralPath $patchDir) {
+      foreach ($patch in (Get-ChildItem -LiteralPath $patchDir -Filter '*.patch' -File | Sort-Object Name)) {
+        Invoke-GitApply $Repo @('apply', '--reverse', '--check', $patch.FullName)
+        if ($script:GitExit -eq 0) { Write-Host "  补丁已在源码里（跳过，也不撤回）：$($patch.Name)"; continue }
+        Invoke-GitApply $Repo @('apply', '--check', $patch.FullName)
+        if ($script:GitExit -ne 0) { throw "补丁无法应用（源码已改动或版本不符）：$($patch.Name)" }
+        Invoke-GitApply $Repo @('apply', $patch.FullName)
+        if ($script:GitExit -ne 0) { throw "补丁应用失败：$($patch.Name)" }
+        [void]$appliedPatches.Add($patch)
+        Write-Host "  已应用补丁：$($patch.Name)"
+      }
+    }
+    Push-Location $Repo
+    try {
+      $env:LEFTHOOK = '0'
+      $buildArgs = @('exec', 'tsx', 'scripts/build-exe-for-python-sdk.ts', '--targets=node24-win-x64')
+      if ($SkipBuild) { $buildArgs += '--skip-build' }
+      Invoke-Native 'pnpm' $buildArgs
+      if ($script:NativeExit -ne 0) { throw "exe 构建失败（退出码 $script:NativeExit）" }
+    } finally { Pop-Location }
+  } finally {
+    # 逆序撤回；撤回失败只警告，不掩盖原本的构建结果
+    for ($i = $appliedPatches.Count - 1; $i -ge 0; $i--) {
+      $patch = $appliedPatches[$i]
+      Invoke-GitApply $Repo @('apply', '-R', $patch.FullName)
+      if ($script:GitExit -eq 0) { Write-Host "  已撤回补丁：$($patch.Name)" }
+      else { Write-Host "  ⚠ 撤回补丁失败，源码需要手工检查：$($patch.Name)" -ForegroundColor Yellow }
+    }
+  }
 }
 
 $dist = Join-Path $Repo 'dist-exe'

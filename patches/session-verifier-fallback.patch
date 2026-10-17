@@ -1,0 +1,65 @@
+diff --git a/packages/session/session-persistence-jsonl/src/migration-verifier.ts b/packages/session/session-persistence-jsonl/src/migration-verifier.ts
+index a23692d802..141437bc1b 100644
+--- a/packages/session/session-persistence-jsonl/src/migration-verifier.ts
++++ b/packages/session/session-persistence-jsonl/src/migration-verifier.ts
+@@ -3,6 +3,7 @@
+ import { Worker } from 'node:worker_threads'
+ import type { WorkerOptions } from 'node:worker_threads'
+ import type { JsonlCompression } from './format.ts'
++import { verifyJsonlCurrentGeneration } from './generation.ts'
+ import type { JsonlExpectedPrefix, JsonlVerifiedGeneration } from './generation.ts'
+ 
+ interface VerificationRequest {
+@@ -105,7 +106,7 @@ function workerSpawn(request: VerificationRequest): { readonly entry: string | U
+  * @param signal - optional cancellation for scheduler wait and Worker execution.
+  * @returns the worker's physical identity and digest after its natural zero exit.
+  */
+-export function verifyCurrentGenerationInWorker(
++export async function verifyCurrentGenerationInWorker(
+   path: string,
+   compression: JsonlCompression,
+   expectedId: string,
+@@ -113,14 +114,35 @@ export function verifyCurrentGenerationInWorker(
+   expectedPrefix?: JsonlExpectedPrefix,
+   signal?: AbortSignal,
+ ): Promise<JsonlVerifiedGeneration> {
+-  return verificationScheduler.run(() => runVerificationWorker(
+-    path,
+-    compression,
+-    expectedId,
+-    expectedEventCount,
+-    expectedPrefix,
+-    signal,
+-  ), signal)
++  try {
++    return await verificationScheduler.run(() => runVerificationWorker(
++      path,
++      compression,
++      expectedId,
++      expectedEventCount,
++      expectedPrefix,
++      signal,
++    ), signal)
++  } catch (error: unknown) {
++    if (!isIsolateUnavailable(error)) throw error
++    return verifyJsonlCurrentGeneration(path, compression, expectedId, expectedEventCount, expectedPrefix)
++  }
++}
++
++/**
++ * Whether a worker failure means this executable cannot load the verifier isolate at all.
++ *
++ * Single-file executables mount their package tree from a virtual snapshot, where the worker
++ * entry is not a real file the worker loader can open. The verification itself is identical
++ * in-process; only the fresh-isolate hardening is lost, so falling back is safe and still
++ * reports the same failures.
++ * @param error - the rejection from spawning or running the isolate.
++ * @returns true when the isolate could not be loaded, so verification should run in-process.
++ */
++function isIsolateUnavailable(error: unknown): boolean {
++  const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error)
++  return /Cannot find module|ERR_MODULE_NOT_FOUND|ERR_UNKNOWN_FILE_EXTENSION|ERR_PACKAGE_PATH_NOT_EXPORTED/i
++    .test(message)
+ }
+ 
+ function runVerificationWorker(

@@ -8,6 +8,10 @@
 *.md    text eol=lf
 *.txt   text eol=lf
 
+# 构建补丁：git apply 按字节匹配目标文件，补丁本身必须是 LF，
+# 否则在别的机器上克隆出来是 CRLF，apply 会整段对不上。
+patches/*.patch text eol=lf
+
 # cmd.exe 按行读批处理，用 CRLF 最稳（内容本身必须是纯 ASCII，见 README）
 *.cmd   text eol=crlf
 

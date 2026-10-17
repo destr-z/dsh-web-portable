@@ -41,13 +41,21 @@ agent" —— 因为逐集逐块人肉核对"这一版和上一版哪儿不一�
 
 ## 下载与校验
 
-最新版：**[v2.0.2](https://github.com/destr-z/dsh-web-portable/releases/tag/v2.0.2)**
-→ [`DSH-Web-v2.0.2.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v2.0.2/DSH-Web-v2.0.2.zip)（88.0 MB）
+最新版：**[v3.0.0](https://github.com/destr-z/dsh-web-portable/releases/tag/v3.0.0)**
+→ [`DSH-Web-v3.0.0.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v3.0.0/DSH-Web-v3.0.0.zip)（82.2 MB）
 
 ```
-DSH-Web-v2.0.2.zip            SHA256  3CC7E449C760A98AFAE7408BD7F240459A2D5FE1290CE2A7D230B29864B873E2
-程序\deepseek-harness.exe     SHA256  BE46218EB287F0855747BD827BF643AD584FA789DD411E2B1341E031C491C358
+DSH-Web-v3.0.0.zip            SHA256  0A645CCC58D9F4B6D370B88BC96E1ED713BAA73C1885614CD8764E580E3657F6
+程序\deepseek-harness.exe     SHA256  E6991611F2D25BF8556112E9361AC4AEE5A20B254E6AA1AFD91AC7C482DA090E
 ```
+
+> **v3.0.0 换的是内置内核**：0.1.7-rc.2 → 0.2.1-rc.2（跨 0.2.0 / 0.2.1 两代）。
+> 第一次启动会把老数据往上迁移（会话格式仍是 v4，迁移面比上次小），
+> **升级前仍建议先复制一份数据目录**（`%LOCALAPPDATA%\DSH-Web`）。
+> 随包的 4 个自研插件同步升到 **0.2.0**（peer 全部改成 `0.2.x`）；
+> 「打开已有会话报 resume failed」的兜底**重新做了一遍**，并且这次固化成了
+> `patches/session-verifier-fallback.patch`，由 `build-portable.ps1` 在构建前自动应用 ——
+> 不会再像 v2.0.2 那样「换源码就丢」。
 
 > **v2.0.x 换的是内置内核**：0.1.5-rc.2 → 0.1.7-rc.2（跨两个 rc）。第一次启动会把老数据
 > 往上迁移（会话格式 v4），**升级前建议先复制一份数据目录**（`%LOCALAPPDATA%\DSH-Web`）。
@@ -156,6 +164,22 @@ pwsh -File build-portable.ps1 -Repo ..\deepseek-harness
 
 产物在 `<上一级>\portable\`：`DSH-Web\`（目录）和 `DSH-Web.zip`（分发用）。
 
+### 本地补丁（`patches\`）
+
+单文件 exe 有几处**上游没有、但便携版必须有**的改动。它们以 patch 形式放在
+`patches\`，`build-portable.ps1` 在构建 exe 之前自动 `git apply`，**构建结束（无论成败）
+再 `git apply -R` 撤回** —— 官方源码 checkout 始终是上游原样，不会被便携版的改动污染。
+构建前就已经在源码里的补丁会被跳过，也不会替人撤回。
+
+| 补丁 | 作用 |
+|---|---|
+| `session-verifier-fallback.patch` | 单文件 exe 里 Worker 线程读不到快照里的 `worker.cjs`；Worker **加载失败**时退回进程内验证（算法一致，只少了新 isolate 这层加固）。修的是「打开已有会话报 `resume failed`」 |
+| `plugin-icon-assets.patch` | 插件页图标的资产通配改成 `node_modules/**/*.{svg,png,...}`。0.2.1 把插件嵌在 `@deepseek-ai/dsh/node_modules/` 下，原来的顶层 `dsh-*` 通配匹配不到，四个实验性插件会报 `icon.svg ENOENT` |
+| `on-demand-install-target.patch` | 打包运行时跳过 `realpathSync`。pkg 的 `/snapshot` 是虚拟挂载，realpath 会映射成 `/node/...` 再 stat → ENOENT，两个官方按需插件因此误报「异常」。附带一行诊断日志 |
+| `runtime-closure-directory-picker.patch` | 运行时闭包补上 `@deepseek-ai/dsh-host-directory-picker`（含锁文件）。它是 `dsh-api-workspace-controller` 的 peer，`auto-install-peers=false` 时不会被装上；缺了会 `failed to import`、**选不了工作区** |
+
+升级内核后请确认 `vfs-gap-check` 仍是 `TOTAL MISSING = 0`。
+
 ### 校验与指纹
 
 ```powershell
@@ -214,6 +238,9 @@ notices/                    再分发主程序必需的许可证与第三方声�
 - 便携版每次启动会把 `插件\` 挂进 profile（同盘用 junction，跨盘退回复制），
   并把"自己装过哪些包"记在 `%LOCALAPPDATA%\DSH-Web\managed-plugins.json`。
   你自己用 `dsh plugin add` 装的插件不会被启动器删除。
+- 「设置 ▸ 插件」里的 **Codex / Claude Code 子智能体**是官方**按需插件**，便携版不带、
+  也没有 pnpm 可装：显示「未安装」是预期，点了会提示装不了（它们还需要外部 Codex/Claude 命令行）。
+  这类需要包管理器的卸载/安装操作，便携版一律不支持——随包插件请直接删 `插件\` 里的文件夹。
 
 ## 许可
 

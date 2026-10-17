@@ -160,10 +160,10 @@ if (!recordRaw) {
 // ---------- 5) 包内文档口径一致 ----------
 console.log('\n--- 5) 文档口径一致 ---')
 const manual = readEntry('/使用说明.txt')?.toString('utf8') ?? ''
-for (const w of ['人设', '剧本批注', '提示词对照', '小鲸鱼余额挂件']) check(manual.includes(w), `使用说明提到「${w}」`)
-check(manual.includes('自带四个插件'), '使用说明写的是"自带四个插件"')
+for (const w of ['人设', '皮肤', '剧本批注', '提示词对照', '小鲸鱼余额挂件']) check(manual.includes(w), `使用说明提到「${w}」`)
+check(manual.includes('自带五个插件'), '使用说明写的是"自带五个插件"')
 const launcher = readEntry('/start-dsh-web.ps1')?.toString('utf8') ?? ''
-check(launcher.includes('四个'), '启动器失败提示也写了四个插件')
+check(launcher.includes('五个'), '启动器失败提示也写了五个插件')
 
 // ---------- 6) zip 内与装配目录逐字节一致 ----------
 console.log('\n--- 6) zip 内 == DSH-Web\\ ---')

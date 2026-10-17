@@ -1,0 +1,17 @@
+diff --git a/scripts/build-exe-for-python-sdk.ts b/scripts/build-exe-for-python-sdk.ts
+index 62fb7e3727..db728633fc 100644
+--- a/scripts/build-exe-for-python-sdk.ts
++++ b/scripts/build-exe-for-python-sdk.ts
+@@ -56,7 +56,11 @@ const ASSET_GLOBS = [
+   'node_modules/**/package.json',
+   'node_modules/**/*.json',
+   // Plugin display metadata resolves these package-owned images at runtime.
+-  'node_modules/@deepseek-ai/dsh-*/**/*.{svg,png,jpg,jpeg,webp}',
++  // Must stay layout-agnostic: a pnpm deploy can nest a plugin under
++  // `node_modules/@deepseek-ai/dsh/node_modules/...`, where a top-level
++  // `node_modules/@deepseek-ai/dsh-*` glob misses its icon and the plugin page
++  // shows `元信息错误 … icon.svg ENOENT`. The whole image payload is <1 MB.
++  'node_modules/**/*.{svg,png,jpg,jpeg,webp}',
+   // Package-owned Markdown includes runtime skill instructions.
+   'node_modules/**/*.md',
+   'node_modules/**/*.dylib',
