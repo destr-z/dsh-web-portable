@@ -42,7 +42,7 @@ agent" —— 因为逐集逐块人肉核对"这一版和上一版哪儿不一�
 ## 下载与校验
 
 最新版：**[v3.0.0](https://github.com/destr-z/dsh-web-portable/releases/tag/v3.0.0)**
-→ [`DSH-Web-v3.0.0.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v3.0.0/DSH-Web-v3.0.0.zip)（82.2 MB）
+→ [`DSH-Web-v3.0.0.zip`](https://github.com/destr-z/dsh-web-portable/releases/download/v3.0.0/DSH-Web-v3.0.0.zip)（82.6 MB）
 
 ```
 DSH-Web-v3.0.0.zip            SHA256  0A645CCC58D9F4B6D370B88BC96E1ED713BAA73C1885614CD8764E580E3657F6
